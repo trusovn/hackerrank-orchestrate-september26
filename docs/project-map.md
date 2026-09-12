@@ -50,6 +50,7 @@ when a concrete implementation requires it.
 | [`ai-foundation.md`](ai-foundation.md) | Persisted AI boundary, validation, retry, observability, and side-effect constraints. | Guidance for model-owning features. |
 | [`initial-analysis/`](initial-analysis/) | Pre-plan product/data findings, evidence catalog, uncertainty register, and ordered analysis runbook. | Start at `initial-analysis/README.md`; hypotheses do not override the product specification. |
 | [`master-plan.md`](master-plan.md) | Deadline-aware product implementation sequence, subsystem boundaries, work packages, acceptance gates, and task-brief handoff. | Start here when creating or ordering bounded implementation tasks. |
+| [`wp-01-plan.md`](wp-01-plan.md) | Implementation-ready contract for WP-01 domain types, strict dataset loading, joined request cases, and repository validation. | Implement after the WP-00 freshness gate passes. |
 | [`foundation-plan.md`](foundation-plan.md) | Historical bootstrap decisions, not live operating guidance. | Context only. |
 | [`foundation-review.md`](foundation-review.md) | Latest independent-style readiness record and observed commands. | Readiness verdict and gaps. |
 | `output.csv` | Generated final predictions at repository root; absent until a solution run creates it. | Submission artifact. |
