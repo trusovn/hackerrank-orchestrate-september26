@@ -330,6 +330,10 @@ the end-to-end MVP proceed.
 
 ### WP-04 — Lifecycle normalization and exact FX
 
+**Status:** ACCEPTED (2026-09-12) — `code/buy_or_wait/events.py` and
+`tests/test_events.py`; `python3 -m unittest tests.test_events` (54 OK); full
+suite 173 OK. See Review Record in the WP-04 plan.
+
 **Depends on:** WP-01 and the typed-fact portion of WP-02
 
 **Goal:** Produce one non-duplicated set of cash effects and reserves in home

@@ -46,6 +46,7 @@ relative to `AGENTS.md`; never hardcode a clone path or home directory.
 
 - Create `log.txt` if missing and keep it in `.gitignore`.
 - Append only. Never rewrite, reorder, or delete earlier entries.
+- Never read the file, even after writing to it.
 - All agents and worktrees use this same root log.
 - Never log secrets, credentials, cookies, private keys, sensitive PII, or raw
   sensitive evidence. Replace secrets in verbatim prompts with `[REDACTED]`.

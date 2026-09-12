@@ -1,6 +1,6 @@
 # WP-04 — Lifecycle Normalization And Exact FX
 
-Status: **READY — GATE ACCEPTED (2026-09-12)**
+Status: **ACCEPTED** — final verdict ACCEPT (2026-09-12), see Review Record
 Authority: [`master-plan.md`](master-plan.md), WP-04  
 Depends on: accepted WP-01 and WP-02; the WP-02 settlement-date correction
 received fresh independent acceptance on 2026-09-12, and the short gate below
