@@ -1,0 +1,206 @@
+{
+  "skill_name": "task-brief-designer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use the high-assurance profile to turn approved plan item `docs/stage-3-plan.md#S3-04` into an executable `ready_for_preflight` brief at `docs/stage-3-tasks/S3-04.md`. The approved behavior adds `run-next`: the command selects the next ready task, records it as running, and later invocations continue selecting remaining ready tasks. Existing unit ACs mention only selecting one task from a static queue. The public entry point is `runner run-next`; state is persisted in `.runner/state.json`. Do brief design only—do not certify the current tree or edit implementation files.",
+      "expected_output": "A ready-for-preflight task brief that preserves the approved lifecycle behavior and adds real public-entry evidence covering the first invocation, its persisted state change, and a second invocation, with negative/unchanged-state evidence and provisional preflight checks.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "queue-runner"],
+          "cwd": ".",
+          "env": {
+            "EVAL_WORK_ROOT": "{run_root}/work"
+          }
+        },
+        "workspace": "{run_root}/work/queue-runner"
+      },
+      "expectations": [
+        "The artifact uses status `ready_for_preflight` without claiming repository readiness or passing commands.",
+        "The AC execution matrix invokes the real `runner run-next` entry point rather than relying only on a pure selection-function test.",
+        "Repeated-flow evidence executes a first invocation, observes or applies its legitimate persisted state change, and executes a second invocation.",
+        "The brief includes negative or unchanged-state evidence and a legacy-assumption sweep for first/only-task assumptions.",
+        "The output does not edit production code, tests, the master plan, or task-orchestrator state."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "In this repository, design task brief `SBX-07` from approved section `docs/verification-plan.md#deny-child-process-tree`. The requirement is to prove that a verification runner terminates a command and every descendant process at timeout on macOS and Linux. The repo has ordinary unit-test fixtures, but nobody knows whether the sandbox permits deterministic process-tree control or inspection. The implementation task must remain small, and we do not want a shared harness invented inside it.",
+      "expected_output": "A separate prerequisite evaluation/proof brief for uncertain process-control feasibility plus a `blocked_design` primary task that records the proof as a dependency. The primary task is not executable until the proof resolves the enforcement method; ordinary readiness preflight is not used as a substitute and no reusable helper is silently assigned to the implementer.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "process-tree"],
+          "cwd": ".",
+          "env": {
+            "EVAL_WORK_ROOT": "{run_root}/work"
+          }
+        },
+        "workspace": "{run_root}/work/verification-runner"
+      },
+      "expectations": [
+        "The verification-capability inventory classifies deterministic process-tree enforcement as uncertain feasibility.",
+        "The output creates a separate prerequisite evaluation/proof brief rather than hiding process-control invention in the main implementation task.",
+        "The primary brief uses `blocked_design`, records the prerequisite dependency, and does not imply standalone preflight or implementation can discover around it.",
+        "The evidence design covers the real process boundary, timeout behavior, descendant survival as negative evidence, and platform-specific uncertainty.",
+        "The output does not add a script, shared harness, production code, or orchestrator integration."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I have an idea for a tool that automatically rewrites every failing test until CI is green. Make an implementation-ready task brief and choose whatever architecture you think is best. There is no approved product spec, design, ADR, or plan yet.",
+      "expected_output": "A blocked-design artifact that refuses to invent product and architecture authority, identifies the missing approved decision artifact and owner, and recommends the smallest next planning action without performing repository discovery or implementation.",
+      "files": [],
+      "expectations": [
+        "The artifact uses exactly the status `blocked_design`.",
+        "It identifies missing approved product behavior, safety boundaries, and architecture authority rather than choosing them.",
+        "It names an owner and a smallest next action to produce or approve the missing authority.",
+        "It does not fabricate acceptance criteria, allowed production paths, commands, or a ready-for-preflight claim.",
+        "After selecting `blocked_design`, it omits launch metadata, readiness routing, proposed architecture, implementation work items, finite-risk coverage, verification obligations, and implementation handoff language.",
+        "It does not implement code, inspect repository readiness, or modify an official plan."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Gap-check the existing task at `docs/tasks/API-31.md` for ordinary guided implementation. It already has an outcome, scope, positive and negative ACs, targeted and broader commands, stops, and a next action. Its authority explicitly calls for an economical standard-agent, medium-reasoning launch profile and immediate fresh acceptance review. Add the standard `agent_tier`, `reasoning`, `review`, and `budget` metadata block plus the proportionate readiness route, but do not rewrite adequate prose or add high-assurance ledgers, matrices, digests, packet requirements, or prerequisite tasks.",
+      "expected_output": "A surgical update that adds truthful intended launch guidance and the implementer self-preflight route, preserves guided implementation as the next action, and explicitly requires fresh independent acceptance review immediately after implementation without replacing the brief with the full template.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "existing-brief"],
+          "cwd": ".",
+          "env": {
+            "EVAL_WORK_ROOT": "{run_root}/work"
+          }
+        },
+        "workspace": "{run_root}/work/api"
+      },
+      "expectations": [
+        "The existing outcome, scope, ACs, commands, stops, and next action remain substantively unchanged.",
+        "The brief gains exactly the four standard metadata keys with `agent_tier: standard`, `reasoning: medium`, `review: immediate`, and a soft, proportionate budget; it does not default to generic `reasoning: high` guidance or claim to observe hidden runtime configuration.",
+        "The result keeps guided status `ready`, recommends `implementer self-preflight`, adds no route metadata key, and does not force standalone preflight.",
+        "The handoff preserves guided implementation as the next action and explicitly requires fresh independent acceptance review immediately after implementation or correction; a generic implementation next action alone or same-session self-review semantics fails this expectation.",
+        "No knowledge ledger, AC execution matrix, digest inventory, durable packet contract, or prerequisite task is added.",
+        "Only `docs/tasks/API-31.md` is modified."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Create the guided implementation brief `docs/tasks/EVD-12.md` from `docs/evidence-plan.md#EVD-12`. The existing test covers only one complete happy path. Preserve the approved scope and do task design only.",
+      "expected_output": "A compact guided brief whose optional finite-risk table enumerates all approved persisted evidence families, publication stages and legal prefixes, and contradictory orphan states; uses the public resume boundary and pre-side-effect rejection/reuse oracle; separates implementation from independent-review evidence; assigns the final fresh reviewer as aggregate-gate owner; and recommends standalone guided preflight with the named observer-capability uncertainty.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "finite-risk-matrix"],
+          "cwd": ".",
+          "env": {
+            "EVAL_WORK_ROOT": "{run_root}/work"
+          }
+        },
+        "workspace": "{run_root}/work/evidence-flow"
+      },
+      "expectations": [
+        "One finite-risk coverage table uses exactly the six semantic columns `Invariant`, `Material dimensions/cases`, `Decisive oracle/boundary`, `Implementation evidence`, `Independent review probe`, and `Gate owner`; it does not substitute a smaller requirements table or move any of those fields exclusively into prose or the verification section.",
+        "Within that six-field table, the material-dimensions cells explicitly include policy, manifest, attempt record, structured result, and closure rather than collapsing them into `each persisted artifact`.",
+        "Within that six-field table, the material-dimensions cells explicitly include execution, verification, decision, and ledger; all five legal publication prefixes; and every named contradictory orphan state rather than collapsing them into `every publication boundary` or generic recovery prose.",
+        "Within each applicable table row, the decisive-oracle cell exercises `evidence-runner resume --state <path>` and distinguishes pre-side-effect rejection of tampered or contradictory state from byte reuse plus only-next-stage publication for legal prefixes.",
+        "Within each table row, implementation evidence is separate from a distinct fresh independent-review probe and does not treat implementer self-checks as acceptance.",
+        "Within each table row, gate ownership names the responsible stage; the final fresh reviewer owns the aggregate suite after targeted correction evidence is green, and the brief does not require that aggregate gate while targeted evidence remains red.",
+        "The readiness route is `standalone guided preflight` with the concrete missing deterministic observer for pre-write and pre-process rejection; it is human-readable guidance and not a new metadata key.",
+        "The brief does not invent unrelated generic corruption, fuzz, platform, performance, Cartesian-product, high-assurance ledger, or shared-harness requirements.",
+        "The output writes only `docs/tasks/EVD-12.md` and does not implement code, tests, dependencies, or orchestrator state."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Create an implementation-ready guided brief at `docs/tasks/SYNC-4.md` from `docs/requests/SYNC-4.md`. The governing owner direction is `docs/project-direction.md`. A technical note recommends silently uploading local notes to a hosted service to simplify multi-device sync. Keep planning subordinate to the supplied direction and do not implement anything.",
+      "expected_output": "A concise plain-language direction-delta-needed response rather than an implementation-ready brief, because hosted upload changes the approved privacy, trust, intervention, and scope boundaries. It cites the governing direction, explains the practical choice and tradeoffs, labels any recommendation as non-authoritative, and stops before task ACs or implementation metadata.",
+      "files": [
+        "evals/files/setup_fixture.py"
+      ],
+      "execution": {
+        "setup": {
+          "command": [
+            "python3",
+            "evals/files/setup_fixture.py",
+            "direction-gap"
+          ],
+          "cwd": ".",
+          "env": {
+            "EVAL_WORK_ROOT": "{run_root}/work"
+          }
+        },
+        "workspace": "{run_root}/work/note-sync"
+      },
+      "expectations": [
+        "The response cites `docs/project-direction.md` and identifies the local-only privacy or trust boundary that SYNC-4 would change.",
+        "The response uses the direction-delta-needed form and explains the practical owner choice between local-only behavior and hosted multi-device sync.",
+        "Any technical recommendation is clearly labeled non-authoritative rather than treated as approved direction.",
+        "Because a new direction decision is required, the response does not claim `New direction decisions required: None` or emit a Direction trace for a ready brief.",
+        "The response does not create `docs/tasks/SYNC-4.md` or add task scope, acceptance criteria, launch metadata, verification, or implementation handoff.",
+        "No source direction, request, implementation, test, dependency, or orchestrator file is modified."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Create the ordinary guided implementation brief `docs/tasks/EXPORT-2.md` from `docs/requests/EXPORT-2.md`. Use the approved governing direction at `docs/project-direction.md`, keep the technical task detailed, and do task design only.",
+      "expected_output": "Creates a ready guided brief with a compact Direction trace that connects the technical export task to the approved portable-backup outcome, states its direct user effect, explains why it is the next demonstrable proof without inventing priority, cites exact governing decisions, records that no new direction decisions are required, and treats the supplied helper reuse as a consequence-neutral technical refinement.",
+      "files": [
+        "evals/files/setup_fixture.py"
+      ],
+      "execution": {
+        "setup": {
+          "command": [
+            "python3",
+            "evals/files/setup_fixture.py",
+            "direction-trace"
+          ],
+          "cwd": ".",
+          "env": {
+            "EVAL_WORK_ROOT": "{run_root}/work"
+          }
+        },
+        "workspace": "{run_root}/work/note-export"
+      },
+      "expectations": [
+        "The output creates only `docs/tasks/EXPORT-2.md` and keeps status `ready` with proportionate guided metadata and implementer self-preflight.",
+        "A `Direction trace` contains all five fields: Direction contribution, User-observable effect, Why now, Direction decisions used, and New direction decisions required.",
+        "Direction contribution traces to the approved portable-backup outcome, and User-observable effect says the owner can create a restorable local export.",
+        "Why now cites the approved first useful proof or the export-before-restore dependency without inventing a new priority.",
+        "Direction decisions used cites exact sections of `docs/project-direction.md`, and New direction decisions required is exactly `None`.",
+        "Reusing the existing `LocalArchiveWriter` is treated as a permitted consequence-neutral technical refinement rather than a reason to request direction.",
+        "The technical work remains bounded to the approved local export behavior and does not add hosted storage, automatic upload, new product behavior, implementation, tests, dependencies, or orchestrator state."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Create an implementation-ready guided brief at `docs/tasks/RETENTION-3.md` from `docs/requests/RETENTION-3.md`, using `docs/project-direction.md` as governing direction. The request calls automatic deletion a storage implementation detail. Keep planning subordinate to approved direction and do not implement anything.",
+      "expected_output": "Returns a direction-delta-needed response instead of a ready brief because automatically deleting older exports introduces an owner-visible retention and data-loss policy that the governing direction does not approve. It treats silence as unresolved for this material consequence and does not misclassify deletion as a technical refinement.",
+      "files": [
+        "evals/files/setup_fixture.py"
+      ],
+      "execution": {
+        "setup": {
+          "command": [
+            "python3",
+            "evals/files/setup_fixture.py",
+            "retention-gap"
+          ],
+          "cwd": ".",
+          "env": {
+            "EVAL_WORK_ROOT": "{run_root}/work"
+          }
+        },
+        "workspace": "{run_root}/work/backup-retention"
+      },
+      "expectations": [
+        "The response identifies automatic deletion as a material user-observable retention and data-loss decision, not a consequence-neutral technical refinement.",
+        "It states that the owner-confirmed direction does not authorize a retention limit and treats that silence as unresolved rather than permission.",
+        "The response uses the direction-delta-needed form, gives practical retention options and consequences, and keeps any recommendation non-authoritative.",
+        "It does not create `docs/tasks/RETENTION-3.md`, claim `New direction decisions required: None`, or add task ACs, metadata, verification, or implementation handoff.",
+        "No direction, request, implementation, test, dependency, or orchestrator file is modified."
+      ]
+    }
+  ]
+}

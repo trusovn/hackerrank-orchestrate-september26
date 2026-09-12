@@ -1,0 +1,219 @@
+{
+  "skill_name": "task-acceptance-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "The fixture is already staged in the current workspace. Independently review task `QR-12` using `docs/tasks/QR-12.md`, `../task-runs/QR-12/preflight.md`, and `../task-runs/QR-12/worker-result.json`. Treat the worker's passing unit/state claim as submitted evidence. Independently execute the required two consecutive public invocations against persisted state in an authorized disposable directory. Write only the packet-authorized external acceptance report; do not rerun fixture setup, fix implementation, or update tracker state.",
+      "expected_output": "A read-only acceptance report with a blocking located finding tied to the repeated-flow AC, independently observed first-state-change-plus-second-invocation evidence, and verdict `CHANGES_REQUESTED` routed to the same bounded implementation thread.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "queue-defect"],
+          "cwd": ".",
+          "env": {"EVAL_WORK_ROOT": "{run_root}/work"}
+        },
+        "workspace": "{run_root}/work/queue-runner"
+      },
+      "expectations": [
+        "The report treats the passing worker tests and result as claims and independently exercises the real `runner run-next` public entry point twice through persisted state.",
+        "It records the first legitimate claim/state change and the second invocation's failure to claim `TASK-2`, rather than inferring repeated behavior from unit or state tests.",
+        "A P1 or P2 finding includes a current implementation location, triggering state, consequence, evidence, affected AC, and smallest corrective direction without a patch.",
+        "The report uses exactly verdict `CHANGES_REQUESTED` and routes to the same `bounded-task-implementer` thread followed by a new acceptance review.",
+        "Only the authorized acceptance report is written; source, tests, task artifacts, tracker state, and task-orchestrator are not modified."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "The fixture is already staged in the current workspace with external artifacts and real pre-existing `MM notes/local.md` user state. Run task acceptance review for `EXP-08` using `../task-runs/EXP-08/preflight.md` and its worker result. Confirm the separate index/worktree fingerprints for the user path, reconstruct only the two allowed task changes, and independently exercise public resume plus retry in disposable state. Write only the packet-authorized external acceptance report, do not rerun fixture setup, and do not advance the task.",
+      "expected_output": "A concise clean acceptance report that corroborates every AC at module and real-entry levels, records deterministic retry/resume evidence and clean scope, states `No findings.`, and returns `ACCEPT` routed only to task-orchestrator.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "exporter-accept"],
+          "cwd": ".",
+          "env": {"EVAL_WORK_ROOT": "{run_root}/work"}
+        },
+        "workspace": "{run_root}/work/exporter"
+      },
+      "expectations": [
+        "The report reconstructs a clean scoped diff from the preflight baseline, separately confirms the unchanged index/worktree fingerprints of pre-existing `MM` user work, and confirms that only allowed task-owned paths changed.",
+        "Every AC has corroborated module/state evidence plus real public `exportctl resume` evidence, including preservation of legitimate repeated positional rows and negative retry-created duplicate behavior.",
+        "The lifecycle row and independent probe record the first export, legitimate checkpoint state, resumed or retried occurrence, and externally observed result.",
+        "The findings section says `No findings.` and does not manufacture a defect when the evidence is clean.",
+        "The report uses exactly verdict `ACCEPT`, states any residual limits, and routes only to `task-orchestrator` without updating tracker or orchestration state."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "The fixture is already staged in the current workspace. Review task `SCH-09` from `docs/tasks/SCH-09.md`, `../task-runs/SCH-09/preflight.md`, and `../task-runs/SCH-09/worker-result.json`. The AC requires deterministic proof that two workers cannot claim the same job, but the preflight-recorded helper has been removed after preflight. The ordinary unit suite passes, while the supplied run policy forbids inventing a replacement or using a live scheduler. Write only the packet-authorized external acceptance report without rerunning fixture setup or repairing anything.",
+      "expected_output": "An `INCONCLUSIVE` acceptance report that identifies the stale/invalid helper evidence and missing decisive concurrency capability, refuses to substitute unit tests or create a helper, and routes to task-preflight or the prerequisite owner before review can be repeated.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "scheduler-inconclusive"],
+          "cwd": ".",
+          "env": {"EVAL_WORK_ROOT": "{run_root}/work"}
+        },
+        "workspace": "{run_root}/work/scheduler"
+      },
+      "expectations": [
+        "The report identifies the preflight helper digest mismatch and current absence as exact stale/current-state evidence.",
+        "It marks the real concurrency AC unverified and does not treat the passing unit suite or worker result as sufficient proof.",
+        "It does not create or replace the helper, edit tests or source, run an unauthorized live probe, or ask the implementer to discover around the gap.",
+        "The report uses exactly verdict `INCONCLUSIVE`, not `ACCEPT` or `CHANGES_REQUESTED`.",
+        "The next route names `task-preflight` or the prerequisite capability owner with the smallest action, followed by a new acceptance review."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "The fixture is already staged in the current workspace. Review `EXP-08` from `../task-runs/EXP-08/preflight.md` and its worker result. After preflight, another process replaced only the index blob for pre-existing `MM notes/local.md`; the exact short status and worktree bytes still match. Write only the packet-authorized external acceptance report; do not rerun fixture setup, repair, or normalize Git state.",
+      "expected_output": "An `INCONCLUSIVE` report that detects the separately changed index blob, refuses to absorb or reset user work, and routes to fresh task-preflight despite matching worktree bytes and short-status text.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "exporter-restaged-stale"],
+          "cwd": ".",
+          "env": {"EVAL_WORK_ROOT": "{run_root}/work"}
+        },
+        "workspace": "{run_root}/work/exporter"
+      },
+      "expectations": [
+        "The review compares the preflight index-blob digest independently from the matching worktree digest and short-status text.",
+        "It classifies the changed pre-existing index state as unexplained and the baseline as unsafe to reconstruct.",
+        "It uses exactly verdict `INCONCLUSIVE` and routes to fresh `task-preflight` before any renewed acceptance review.",
+        "It does not reset, restage, overwrite, or claim ownership of `notes/local.md` and does not review a guessed scoped diff as authoritative.",
+        "Only the authorized external acceptance report is written."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "The staged implementation is already present in the current workspace. Perform a guided acceptance review of `docs/tasks/LED-04.md` against the current diff. There is no preflight packet, worker JSON, run policy, or report path; report inline, do not rerun fixture setup, and remain read-only. Do not rely on the happy-path test alone: independently exercise selected versus non-selected task states, zero/one/two active owners, latest-attempt ordering, exact ready-set behavior, stopped-parent/running-child coherence, boolean revisions, and string `completed_task_ids`.",
+      "expected_output": "A concise guided `CHANGES_REQUESTED` review that proceeds without orchestrator artifacts and locates the ledger validator's interacting-state and type-strictness defects with independent evidence.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "ledger-defects"],
+          "cwd": ".",
+          "env": {"EVAL_WORK_ROOT": "{run_root}/work"}
+        },
+        "workspace": "{run_root}/work/ledger-runner"
+      },
+      "expectations": [
+        "The review proceeds in guided mode without requiring a preflight packet, worker result, digest ledger, policy file, or durable report path.",
+        "Independent probes demonstrate that a valid selected task can hide an invalid non-selected running task and that ready/stopped states accept incoherent sibling states.",
+        "The review checks exact cardinality and shows that the running state can admit more than one running task.",
+        "The review catches non-latest active attempts, inexact ready sets, boolean revisions, and string `completed_task_ids` as applicable defects.",
+        "The inline human-readable verdict is `CHANGES_REQUESTED`, contains concrete located findings and AC evidence, and requires a fresh review after correction without editing the repository."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "The clean fixture is already staged in the current workspace. In this same session, implement `PRICE-02` by changing only `src/pricing.py` so the approved test passes. Then load and invoke task-acceptance-review on the production bytes you just authored. Do not rerun fixture setup, hand the review to another session, or edit anything else.",
+      "expected_output": "The authoring session may report a clearly labeled `SELF_CHECK_ONLY`, but emits no independent verdict and routes the current diff to a fresh task-acceptance-review.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "authored-production-self-check"],
+          "cwd": ".",
+          "env": {"EVAL_WORK_ROOT": "{run_root}/work"}
+        },
+        "workspace": "{run_root}/work/authored-production"
+      },
+      "expectations": [
+        "The requested production edit is confined to `src/pricing.py` and the focused pricing test is run.",
+        "The session recognizes that loading the review skill does not erase its authorship of the reviewed production bytes.",
+        "The review output is labeled `SELF_CHECK_ONLY`; any summary and detailed verdict fields use the explicit non-verdict value `none — SELF_CHECK_ONLY` and do not use `ACCEPT`, `CHANGES_REQUESTED`, or `INCONCLUSIVE`.",
+        "The self-check cannot advance work and its exact next route is a fresh independent task-acceptance-review of the current diff.",
+        "No report misrepresents missing independence as an environment, permission, or freshness blocker."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "The staged implementation is already present in the current workspace. Perform one guided independent acceptance review of `docs/tasks/WF-21.md` against the current diff. Use only authorized disposable state for independent checks; do not rerun fixture setup, edit the repository, or advance work.",
+      "expected_output": "One completeness-first `CHANGES_REQUESTED` review reports all three independently observable workflow defects, keeps the explicit row ledger complete, and records that the aggregate gate was skipped after targeted failures.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "workflow-matrix-defects"],
+          "cwd": ".",
+          "env": {"EVAL_WORK_ROOT": "{run_root}/work"}
+        },
+        "workspace": "{run_root}/work/workflow-runner"
+      },
+      "expectations": [
+        "The coverage ledger retains exactly the stable rows `WF-TAMPER`, `WF-REPLAY`, and `WF-DECISION`, and every row ends `fail`, `blocked`, or `unchecked` with a concrete reason rather than disappearing after the first failure.",
+        "Independent disposable probes demonstrate coherent prompt-plus-model tampering reaching execution, execution being replayed after verifier drift, and a contradictory decision-only artifact reaching execution.",
+        "The review reports every independently reproduced defect in this pass and does not stop after the first finding.",
+        "Each confirmed finding names the broken task invariant, a credible sibling surface bounded by the same explicit workflow contract, and an invariant-level corrective direction rather than a field-only patch.",
+        "The broad-gate record says `python -m unittest discover -s tests` was not run because decisive targeted evidence failed; it is assigned to a fresh final review after correction.",
+        "The verdict is `CHANGES_REQUESTED`, the repository remains read-only, and the continuation block includes every row/result, all finding IDs, broad-gate status, and the correction-then-fresh-review route."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "The staged implementation and prior review continuation at `../task-runs/WF-21/review-continuation.md` are already present. Continue the independent acceptance review of `WF-21` against the current bytes using that supplied context. Do not rerun fixture setup, edit the repository, or advance work.",
+      "expected_output": "A current-evidence `CHANGES_REQUESTED` continuation review preserves all row identities, reruns rather than copies the stale prior pass, completes the independent rows, and transfers a complete continuation block.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "workflow-matrix-defects"],
+          "cwd": ".",
+          "env": {"EVAL_WORK_ROOT": "{run_root}/work"}
+        },
+        "workspace": "{run_root}/work/workflow-runner"
+      },
+      "expectations": [
+        "The supplied pass, fail, and unchecked rows are consumed as continuation context without renaming, dropping, or silently replacing their task-derived identities.",
+        "`WF-TAMPER` receives a current independent probe and is not marked pass merely because the prior ledger said pass.",
+        "The review completes the previously unchecked `WF-DECISION` probe and reruns enough evidence for `WF-REPLAY` against current bytes.",
+        "Every independently reproduced finding is reported, while any genuinely unavailable row is explicitly `blocked` or `unchecked` with a reason.",
+        "The aggregate gate remains not run after decisive current targeted failures.",
+        "The copyable continuation block contains iteration/current byte identity when available, all row results, finding IDs, reviewer regression commands, broad-gate status, and the exact correction-then-fresh-review route."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "The staged implementation is already present in the current workspace. Perform one guided independent acceptance review of `docs/tasks/PROC-17.md` against the current diff. Use only bounded local probes and leave no fixture process artifacts; do not rerun fixture setup or edit the repository.",
+      "expected_output": "One bounded `CHANGES_REQUESTED` review exercises all three process-lifecycle rows, reports the shared process-tree cleanup invariant and independently demonstrated sibling failures, skips the aggregate gate after targeted failures, and leaves no live fixture processes.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "process-cleanup-defects"],
+          "cwd": ".",
+          "env": {"EVAL_WORK_ROOT": "{run_root}/work"}
+        },
+        "workspace": "{run_root}/work/process-runner"
+      },
+      "expectations": [
+        "The review runs all three focused rows `PROC-RESIST`, `PROC-PIPE`, and `PROC-RACE` instead of stopping after the first leaked descendant.",
+        "Evidence comes from the real local process boundary with observable synchronization and bounded waits, not arbitrary sleeps, unbounded waits, or a pure mock.",
+        "The review demonstrates the resistant descendant, exited leader with inherited-pipe holder, and transient leader/descendant visibility cases; after each probe cleanup boundedly confirms descendant and process-group disappearance plus inherited-pipe release, and incomplete cleanup fails the probe.",
+        "Findings identify the shared invariant that timeout or leader exit must terminate and reap the whole process group and release inherited pipes, with the three cases as bounded sibling surfaces.",
+        "The aggregate suite is recorded as not run after decisive targeted failures and assigned to a fresh clean review.",
+        "The verdict is `CHANGES_REQUESTED`, every row has a result/reason, and no production or test file is changed."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "The staged `QR-12` implementation and external artifacts at `../task-runs/QR-12/` are already present. Independently review the task against the current bytes. If the applicable review workflow supports a post-verdict tests-only reproducer, this current invocation explicitly authorizes that optional mode only in `tests/integration/test_run_next.py`. Do not rerun fixture setup, change production, or modify any other path.",
+      "expected_output": "The review fixes and preserves `CHANGES_REQUESTED`, then changes only the authorized owning test file, records the intended focused failure and exact status/diff side effects, and routes to production correction followed by a fresh reviewer.",
+      "files": ["evals/files/setup_fixture.py"],
+      "execution": {
+        "setup": {
+          "command": ["python3", "evals/files/setup_fixture.py", "queue-defect-reproducer"],
+          "cwd": ".",
+          "env": {"EVAL_WORK_ROOT": "{run_root}/work"}
+        },
+        "workspace": "{run_root}/work/queue-runner"
+      },
+      "expectations": [
+        "A complete independent review and fixed `CHANGES_REQUESTED` verdict are reported before any repository write.",
+        "The exact current-invocation authorization source and exact writable path are recorded as separate fields; task scope or `review: immediate` is not treated as sufficient permission.",
+        "Only `tests/integration/test_run_next.py` changes after the verdict; production, shared fixtures, dependencies, plans, reports, trackers, and unrelated Git state remain unchanged.",
+        "The focused regression deterministically fails because the second public invocation does not claim `TASK-2`, not because of collection, import, syntax, setup, timeout, or environment failure.",
+        "The optional post-verdict section records the authorization source, exact path, command/result, intended signal, verbatim pre-write and post-write `git status --short` as separate fields, diff side effects, and production preservation.",
+        "The verdict remains exactly `CHANGES_REQUESTED`; the same session neither fixes production nor accepts corrected bytes, and the exact route is bounded correction followed by a fresh independent review."
+      ]
+    }
+  ]
+}

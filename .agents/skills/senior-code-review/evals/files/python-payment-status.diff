@@ -1,0 +1,41 @@
+diff --git a/migrations/20260703_add_payment_status.sql b/migrations/20260703_add_payment_status.sql
+new file mode 100644
+index 0000000..f5b8b65
+--- /dev/null
++++ b/migrations/20260703_add_payment_status.sql
+@@ -0,0 +1,4 @@
++ALTER TABLE payments
++    ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';
++
++CREATE INDEX payments_status_idx ON payments(status);
+diff --git a/payments/repository.py b/payments/repository.py
+index e07d127..d36c7d4 100644
+--- a/payments/repository.py
++++ b/payments/repository.py
+@@ -22,7 +22,10 @@ class PaymentRepository:
+         return self._db.execute(query, (account_id,)).fetchall()
+ 
+     def list_completed(self, account_id: str) -> list[Payment]:
+-        query = "SELECT * FROM payments WHERE account_id = ? ORDER BY created_at DESC"
++        query = """
++            SELECT * FROM payments
++            WHERE account_id = ? AND status = 'succeeded'
++            ORDER BY created_at DESC
++        """
+         return self._db.execute(query, (account_id,)).fetchall()
+diff --git a/tests/test_payment_repository.py b/tests/test_payment_repository.py
+index 1c3cc2f..c621887 100644
+--- a/tests/test_payment_repository.py
++++ b/tests/test_payment_repository.py
+@@ -9,10 +9,11 @@ def test_list_completed(db):
+     account_id = "acct-1"
+     db.execute(
+-        "INSERT INTO payments (id, account_id, amount) VALUES (?, ?, ?)",
+-        ("pay-1", account_id, 1000),
++        "INSERT INTO payments (id, account_id, amount, status) VALUES (?, ?, ?, ?)",
++        ("pay-1", account_id, 1000, "succeeded"),
+     )
+ 
+     rows = PaymentRepository(db).list_completed(account_id)
+ 
+     assert [row["id"] for row in rows] == ["pay-1"]

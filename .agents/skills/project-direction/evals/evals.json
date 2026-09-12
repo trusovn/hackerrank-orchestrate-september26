@@ -1,0 +1,77 @@
+{
+  "skill_name": "project-direction",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Turn `notes/reading-helper.md` into an owner-editable project direction at `docs/project-direction.md`. I do not know software architecture, so keep technical choices out. The notes already contain my decisions; list anything genuinely unresolved instead of waiting for another interview.",
+      "expected_output": "Creates a concise full direction from a raw idea with an ordered conflict rule, normal/recovery/must-stop stories, first useful proof, scope and non-goals, trust and intervention boundaries, a separated decision ledger, and a downstream planning contract.",
+      "files": [
+        "evals/files/setup_fixture.py"
+      ],
+      "execution": {
+        "setup": {
+          "command": [
+            "python3",
+            "evals/files/setup_fixture.py",
+            "initial-direction"
+          ],
+          "cwd": ".",
+          "env": {
+            "EVAL_WORK_ROOT": "{run_root}/work"
+          }
+        },
+        "workspace": "{run_root}/work/reading-helper"
+      }
+    },
+    {
+      "id": 2,
+      "prompt": "The documents under `docs/source/` are supposed to describe the direction for this project, but they are dominated by architecture and delivery details. Audit them and write `docs/project-direction.md` so I can govern the project without technical knowledge. Separate current owner direction from implementation choices, history, contradictions, and decisions that still need my confirmation.",
+      "expected_output": "Extracts a plain-language governing direction from the architecture-heavy task-orchestrator documents, including the user workflow, ordered tradeoffs, first proof, trusted-local boundary, non-goals, and unapproved or conflicting direction decisions without reproducing an architecture plan.",
+      "files": [
+        "evals/files/setup_fixture.py"
+      ],
+      "execution": {
+        "setup": {
+          "command": [
+            "python3",
+            "evals/files/setup_fixture.py",
+            "technical-audit"
+          ],
+          "cwd": ".",
+          "env": {
+            "EVAL_WORK_ROOT": "{run_root}/work"
+          }
+        },
+        "workspace": "{run_root}/work/orchestrator-audit"
+      }
+    },
+    {
+      "id": 3,
+      "prompt": "Our current direction is `docs/project-direction.md`. The draft technical brief at `docs/tasks/FLOW-2.md` now proposes defenses against a malicious local user. Correction: the local user is trusted; we only need to contain agent mistakes and accidental corruption. Write an owner-confirmed delta at `docs/direction-delta.md`, identify downstream material that needs review, and do not rewrite the technical brief or invent a cryptographic mechanism.",
+      "expected_output": "Creates a concise owner-confirmed direction delta that changes the trust and assurance boundary, preserves unchanged direction, explains practical impact, names the downstream brief for review, and does not rewrite technical plans or select an implementation.",
+      "files": [
+        "evals/files/setup_fixture.py"
+      ],
+      "execution": {
+        "setup": {
+          "command": [
+            "python3",
+            "evals/files/setup_fixture.py",
+            "direction-delta"
+          ],
+          "cwd": ".",
+          "env": {
+            "EVAL_WORK_ROOT": "{run_root}/work"
+          }
+        },
+        "workspace": "{run_root}/work/flow-correction"
+      }
+    },
+    {
+      "id": 4,
+      "prompt": "Before I decide whether to build a subscription service for independent bookstores, research competitors, estimate demand, and tell me whether the business is commercially worth pursuing. Do not create a vision or direction document yet.",
+      "expected_output": "Recognizes that commercial validation and current external research belong to idea investigation, does not create a project direction artifact, and recommends the appropriate next workflow without pretending the owner has decided to proceed.",
+      "files": []
+    }
+  ]
+}

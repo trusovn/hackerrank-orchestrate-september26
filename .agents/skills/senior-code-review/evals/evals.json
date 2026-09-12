@@ -1,0 +1,50 @@
+{
+  "skill_name": "senior-code-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Act as the final reviewer for the attached TypeScript API patch. Review only; do not modify it. Decide whether it is safe to merge and cite exact changed lines.",
+      "expected_output": "A concise review that blocks the merge because the endpoint authorizes updates using an attacker-controlled path user ID instead of the authenticated principal, and notes the missing cross-user authorization test as evidence of the uncovered behavior without duplicating the root finding.",
+      "files": [
+        "evals/files/typescript-account-email.diff"
+      ],
+      "expectations": [
+        "The review identifies that the authenticated caller can choose another account through the userId path parameter.",
+        "The finding cites src/routes/account.ts:23 or src/routes/account.ts:27 and explains the cross-account email-change impact.",
+        "The missing cross-user test is connected to the authorization failure without being reported as a duplicate root finding.",
+        "The report uses a P1 severity and a CHANGES REQUESTED verdict.",
+        "The report states its scope and honestly says that tests were not run."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Please do a senior-level review of this Go inventory reservation change. Focus on production correctness, not formatting. Return findings first and a merge verdict.",
+      "expected_output": "A review that identifies the non-atomic read-check-write reservation as a realistic oversell/lost-update race, identifies discarded repository read errors, cites lines, and requests changes.",
+      "files": [
+        "evals/files/go-inventory-reservation.diff"
+      ],
+      "expectations": [
+        "The review identifies the non-atomic read-check-write sequence and gives a concrete concurrent oversell or lost-update scenario.",
+        "The race finding cites internal/inventory/service.go:36-43 and recommends an atomic repository or transaction-level invariant.",
+        "The review separately identifies that the repository Get error is discarded.",
+        "The report does not spend findings on formatting or style.",
+        "The report uses a CHANGES REQUESTED verdict and honestly records that tests were not run."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Review this payment-status migration and application patch as if it were a release-blocking PR. Check existing-data behavior and tests, remain read-only, and state what you verified.",
+      "expected_output": "A review that traces the migration default into the new succeeded-only query, explains that historical successful payments become pending and disappear from results, observes that fresh-database tests cannot catch the upgrade bug, and requests changes.",
+      "files": [
+        "evals/files/python-payment-status.diff"
+      ],
+      "expectations": [
+        "The review traces the migration default of pending into the repository's succeeded-only filter.",
+        "The review explains that historical completed payments disappear after upgrade.",
+        "The finding cites both migrations/20260703_add_payment_status.sql:2 and payments/repository.py:27.",
+        "The review explains why the fresh insert with explicit succeeded status does not test the upgrade path.",
+        "The report recommends a semantically correct backfill or staged migration and uses CHANGES REQUESTED."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "skill_name": "session-handoff",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Before I clear context, make me a handoff for the next agent. We are in `/Users/lee/work/orders-ui`. The goal is to finish CSV export. We changed `src/orders/export.ts` and `src/orders/export.test.ts`, decided not to add a CSV package, and the focused test fails on quote escaping. Full suite has not run.",
+      "expected_output": "A copy/paste-ready handoff packet with a resume prompt, workspace, goal, current state, decisions, changed files, focused test result, full-suite gap, open quote-escaping issue, and concrete next actions.",
+      "files": [],
+      "expectations": [
+        "The output includes a dedicated Resume Prompt that can be pasted into a new session.",
+        "The output identifies the workspace and primary goal.",
+        "The output preserves the decision not to add a CSV package and explains why it matters.",
+        "The output lists the changed files with their roles.",
+        "The output distinguishes the failed focused test from the full suite not being run.",
+        "The output gives concrete next actions for the next agent."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Summarize this research session so I can paste it into a fresh chat. No file writes. We compared Stripe Billing, Paddle, and Lemon Squeezy for a small SaaS. Decision: Stripe is default because the app already uses Stripe Checkout; Paddle stays an option if merchant-of-record tax handling becomes more important. Open questions: EU VAT requirements, migration cost, pricing table copy. Include what to verify next.",
+      "expected_output": "A copy/paste-only handoff that avoids filesystem artifact creation, captures the payment-provider decision, notes the reason and fallback condition, lists unresolved research questions, and recommends verification steps.",
+      "files": [],
+      "expectations": [
+        "The output does not claim to write or create a file.",
+        "The output captures Stripe as the default decision and Paddle as a conditional fallback.",
+        "The output separates confirmed decisions from open questions.",
+        "The output lists current facts that should be verified before relying on them.",
+        "The output includes a concise resume prompt for a new chat."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Create a durable handoff file and a copy/paste resume prompt. We are midway through fixing a CI failure in a Java API repo. `./mvnw -q test` fails in `PetControllerTest.shouldReturn404ForMissingPet`; suspected cause is the service now throws `PetNotFoundException` but the controller advice doesn't map it. Modified `src/main/java/com/acme/pets/PetService.java`; do not touch unrelated changes in `README.md`.",
+      "expected_output": "A handoff that says a durable file should be written when filesystem access is available, includes a standalone copy/paste resume prompt, identifies the failing command/test, suspected cause, modified file, untouched README guardrail, and next implementation steps.",
+      "files": [],
+      "expectations": [
+        "The output includes both a durable artifact path or plan and a standalone copy/paste prompt.",
+        "The output names the failing Maven command and test.",
+        "The output captures the suspected exception mapping cause without overstating it as proven.",
+        "The output lists `PetService.java` as modified.",
+        "The output warns not to touch unrelated `README.md` changes.",
+        "The output gives next steps centered on controller advice and verification."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+diff --git a/src/routes/account.ts b/src/routes/account.ts
+index 2eb91e1..a82d7d1 100644
+--- a/src/routes/account.ts
++++ b/src/routes/account.ts
+@@ -18,6 +18,18 @@ router.get("/account", requireSession, async (req, res) => {
+   res.json(account);
+ });
+ 
++router.put("/users/:userId/email", requireSession, async (req, res) => {
++  const userId = req.params.userId;
++  const email = emailSchema.parse(req.body.email);
++
++  const account = await db.account.update({
++    where: { id: userId },
++    data: { email },
++    select: { id: true, email: true },
++  });
++
++  res.json(account);
++});
++
+ export default router;
+diff --git a/test/account.test.ts b/test/account.test.ts
+index e806a4c..914ca01 100644
+--- a/test/account.test.ts
++++ b/test/account.test.ts
+@@ -44,4 +44,17 @@ describe("account routes", () => {
+     expect(response.status).toBe(200);
+     expect(response.body.id).toBe(alice.id);
+   });
++
++  it("updates an account email", async () => {
++    const response = await request(app)
++      .put(`/users/${alice.id}/email`)
++      .set("Authorization", sessionFor(alice))
++      .send({ email: "alice+new@example.com" });
++
++    expect(response.status).toBe(200);
++    expect(response.body).toEqual({
++      id: alice.id,
++      email: "alice+new@example.com",
++    });
++  });
+ });
+

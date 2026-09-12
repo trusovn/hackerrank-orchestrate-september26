@@ -1,0 +1,4 @@
+interface:
+  display_name: "Testing Discipline"
+  short_description: "Design and maintain risk-focused test suites"
+  default_prompt: "Use $testing-discipline to define, implement, or review proportionate test evidence for this change."
