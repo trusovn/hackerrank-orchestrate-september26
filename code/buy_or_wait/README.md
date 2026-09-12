@@ -62,7 +62,7 @@ Public result types: `EventNormalization`, `NormalizedCashRecord`,
 |---|---|
 | Decision helpers | `_event_decision`, `_fact_decision` |
 | Input validation | `_validate` (contracts, duplicate IDs, unknown carriers/targets, fact routing buckets), `_build_rate_index` (rate conflicts/invalid rates) |
-| FX conversion | `_convert` (exact directed settlement-date rate; `fx_rate_missing` when absent) |
+| FX conversion | `convert_exact` (public pure exact-FX converter seam: directed settlement-date rate, no rounding/inversion/chaining), `_convert` (exact directed settlement-date rate; `fx_rate_missing` when absent), `build_directed_rate_index` (directed rate index used by both `_convert` and `convert_exact`) |
 | Event classification | `_classify` (status/direction dispatch: settled -> historical, pending debit -> reserve, scheduled -> dated effect, failed/cancelled/unrealized -> excluded), `_settled_boundary_check`, `_reserve`, `_resolve_effect_amount` (event amount or single fill fact; never invents amounts), `_record_fields` |
 | Fact-only credits | `_emit_fact_credit` (confirmed future credit -> one dated credit effect) |
 | Transfer pairs | `_classify_transfer_pairs`, `_find_counterpart` (exact match incl. `linked_event_id`), `_strip_pair_effects` (removes effects/reserves from neutralized events) |

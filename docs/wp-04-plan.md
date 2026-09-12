@@ -354,3 +354,41 @@ tests do not certify WP-05 forecast safety or final output correctness.
   accepted bytes, then implement WP-04.
 - Required follow-on: immediately after implementation or correction, hand the
   completed bytes to a fresh independent acceptance reviewer.
+
+## Review Record
+
+WP-04A acceptance (2026-09-12): independent `task-acceptance-review` on the
+narrow WP-04 interface correction per `docs/wp-04a-fx-seam-brief.md`.
+Implementation: `code/buy_or_wait/events.py` now exports `convert_exact` and
+`build_directed_rate_index` (pure, standard-library-only, in `__all__`);
+`_Normalizer._build_rate_index` delegates to the shared builder, preserving the
+accepted loop byte-for-byte (verified against commit `78d9a7b`); `_convert`
+unchanged. New `ConvertExactSeamTests` in `tests/test_events.py` with
+hand-built `ExchangeRateRecord` tuples and independent expected constants;
+`code/buy_or_wait/README.md` symbol-map row updated.
+
+Fresh independent review (2026-09-12): no findings. Targeted probes passed
+across the ACs: importable/public `__all__`, home-currency passthrough with no
+rate consulted (even with a zero rate present), exact product
+`Decimal("1800") * Decimal("15833.33") == Decimal("28499994.00")` with exact
+`as_tuple`, missing/reverse-only/prior-date-only/later-date-only/wrong-pair
+fixtures each fail closed with `fx_rate_missing` and key-last safe IDs
+(prefix `source_ids` order preserved), conflict and invalid errors carry the
+safe key ID only without `source_ids` and never raw carrier content,
+conflict takes precedence over a later invalid rate, identical duplicate
+rates are silently skipped exactly as in the accepted index builder, and the
+seam is deterministic with no state between calls. Byte preservation
+corroborated: delegation diff is line-for-line identical to the accepted
+loop; targeted suite 64 OK, owning regression
+`python3 -m unittest tests.test_repository tests.test_evidence tests.test_events`
+151 OK (skipped=1 pre-existing); aggregate gate on final bytes
+`python3 -m unittest discover -s tests -p 'test_*.py'` — 183 OK (skipped=1);
+`python3 -m compileall -q code tests` and `git diff --check` clean. Fail-first
+row is historical (converter exists on current bytes) and non-material; the
+regression suite serves as the behavioral oracle. Non-blocking robustness
+note: `ConvertExactSeamTests` sits after the `unittest.main()` guard, so
+direct execution `python3 tests/test_events.py` skips it (56/64); every
+canonical command uses `-m unittest` (64 OK).
+
+Verdict: **ACCEPT** (AC-1–AC-6 satisfied; no open findings). WP-05 resumes
+after re-running its dependency gate on these bytes.

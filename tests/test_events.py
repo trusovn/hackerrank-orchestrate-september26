@@ -43,6 +43,7 @@ from buy_or_wait.evidence import (  # noqa: E402
     EvidenceResolution,
 )
 
+from buy_or_wait import events as events_module  # noqa: E402
 from buy_or_wait.events import (  # noqa: E402
     EventNormalization,
     EventNormalizationError,
@@ -50,6 +51,7 @@ from buy_or_wait.events import (  # noqa: E402
     NormalizedCashEffect,
     NormalizedCashRecord,
     NormalizedReserve,
+    convert_exact,
     normalize_case_events,
 )
 
@@ -1748,3 +1750,113 @@ class ComponentCorpusTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConvertExactSeamTests(unittest.TestCase):
+    """Public pure exact-FX converter seam (WP-04A)."""
+
+    USD_IDR = ((
+        ExchangeRateRecord(
+            rate_date=_d("2024-03-15"),
+            from_currency=CurrencyCode.USD,
+            to_currency=CurrencyCode.IDR,
+            rate=Decimal("15833.33"),
+        ),
+    ),)
+
+    def test_importable_from_events_module(self) -> None:
+        self.assertIn("convert_exact", events_module.__all__)
+        self.assertTrue(callable(convert_exact))
+
+    def test_home_currency_passthrough_no_rate_consulted(self) -> None:
+        self.assertEqual(
+            convert_exact((), Decimal("250"), _d("2024-03-15"),
+                          CurrencyCode.IDR, CurrencyCode.IDR),
+            Decimal("250"),
+        )
+        # No rate consulted even with an invalid rate present.
+        self.assertEqual(
+            convert_exact((ExchangeRateRecord(
+                rate_date=_d("2024-03-15"),
+                from_currency=CurrencyCode.IDR,
+                to_currency=CurrencyCode.IDR,
+                rate=Decimal("0"),
+            ),), Decimal("250"), _d("2024-03-15"),
+                CurrencyCode.IDR, CurrencyCode.IDR),
+            Decimal("250"),
+        )
+
+    def test_exact_product_no_rounding(self) -> None:
+        result = convert_exact(self.USD_IDR[0], Decimal("1800"),
+                               _d("2024-03-15"), CurrencyCode.USD,
+                               CurrencyCode.IDR)
+        self.assertEqual(result, Decimal("28499994.00"))
+        self.assertEqual(result, Decimal("1800") * Decimal("15833.33"))
+        self.assertEqual(result.as_tuple(), Decimal("28499994.00").as_tuple())
+
+    def test_reverse_only_rate_is_never_inverted(self) -> None:
+        rates = (ExchangeRateRecord(
+            rate_date=_d("2024-03-15"),
+            from_currency=CurrencyCode.IDR,
+            to_currency=CurrencyCode.USD,
+            rate=Decimal("0.0000632"),
+        ),)
+        with self.assertRaises(EventNormalizationError) as ctx:
+            convert_exact(rates, Decimal("1800"), _d("2024-03-15"),
+                          CurrencyCode.USD, CurrencyCode.IDR)
+        self.assertEqual(ctx.exception.reason_code, "fx_rate_missing")
+
+    def test_prior_date_only_rate_is_never_used(self) -> None:
+        rates = (ExchangeRateRecord(
+            rate_date=_d("2024-03-14"),
+            from_currency=CurrencyCode.USD,
+            to_currency=CurrencyCode.IDR,
+            rate=Decimal("15833.33"),
+        ),)
+        with self.assertRaises(EventNormalizationError) as ctx:
+            convert_exact(rates, Decimal("1800"), _d("2024-03-15"),
+                          CurrencyCode.USD, CurrencyCode.IDR,
+                          source_ids=("occ_1",))
+        self.assertEqual(ctx.exception.reason_code, "fx_rate_missing")
+        self.assertEqual(
+            ctx.exception.source_ids,
+            ("occ_1", "2024-03-15:USD:IDR"),
+        )
+
+    def test_conflicting_duplicate_fails_closed_without_source_ids(self) -> None:
+        rates = self.USD_IDR[0] + (ExchangeRateRecord(
+            rate_date=_d("2024-03-15"),
+            from_currency=CurrencyCode.USD,
+            to_currency=CurrencyCode.IDR,
+            rate=Decimal("15833.34"),
+        ),)
+        with self.assertRaises(EventNormalizationError) as ctx:
+            convert_exact(rates, Decimal("1800"), _d("2024-03-15"),
+                          CurrencyCode.USD, CurrencyCode.IDR,
+                          source_ids=("occ_1",))
+        self.assertEqual(ctx.exception.reason_code, "fx_rate_conflict")
+        self.assertEqual(
+            ctx.exception.source_ids, ("2024-03-15:USD:IDR",)
+        )
+
+    def test_invalid_rate_fails_closed_without_source_ids(self) -> None:
+        rates = (ExchangeRateRecord(
+            rate_date=_d("2024-03-15"),
+            from_currency=CurrencyCode.USD,
+            to_currency=CurrencyCode.IDR,
+            rate=Decimal("0"),
+        ),)
+        with self.assertRaises(EventNormalizationError) as ctx:
+            convert_exact(rates, Decimal("1800"), _d("2024-03-15"),
+                          CurrencyCode.USD, CurrencyCode.IDR)
+        self.assertEqual(ctx.exception.reason_code, "fx_rate_invalid")
+        self.assertEqual(
+            ctx.exception.source_ids, ("2024-03-15:USD:IDR",)
+        )
+
+    def test_non_record_element_fails_closed(self) -> None:
+        with self.assertRaises(EventNormalizationError) as ctx:
+            convert_exact(("15833.33",), Decimal("1800"),
+                          _d("2024-03-15"), CurrencyCode.USD,
+                          CurrencyCode.IDR)
+        self.assertEqual(ctx.exception.reason_code, "invalid_rate_record")

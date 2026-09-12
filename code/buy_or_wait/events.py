@@ -36,7 +36,68 @@ __all__ = [
     "NormalizedCashRecord",
     "NormalizedReserve",
     "normalize_case_events",
+    "build_directed_rate_index",
+    "convert_exact",
 ]
+
+
+def build_directed_rate_index(
+    rates: tuple[ExchangeRateRecord, ...],
+) -> dict[tuple[date, CurrencyCode, CurrencyCode], Decimal]:
+    """Directed exact-FX rate index keyed by (rate_date, from, to).
+
+    Fails closed on a non-record element, a conflicting duplicate key, or a
+    non-finite/non-positive rate; conflict/invalid errors carry the safe key
+    ID only.
+    """
+
+    index: dict[tuple[date, CurrencyCode, CurrencyCode], Decimal] = {}
+    for rate in rates:
+        if not isinstance(rate, ExchangeRateRecord):
+            raise EventNormalizationError("invalid_rate_record", ())
+        key = (rate.rate_date, rate.from_currency, rate.to_currency)
+        if key in index and index[key] != rate.rate:
+            raise EventNormalizationError(
+                "fx_rate_conflict",
+                (f"{key[0].isoformat()}:{key[1].value}:{key[2].value}",),
+            )
+        if key in index:
+            continue
+        if not rate.rate.is_finite() or rate.rate <= 0:
+            raise EventNormalizationError(
+                "fx_rate_invalid",
+                (f"{key[0].isoformat()}:{key[1].value}:{key[2].value}",),
+            )
+        index[key] = rate.rate
+    return index
+
+
+def convert_exact(
+    rates: tuple[ExchangeRateRecord, ...],
+    source_amount: Decimal,
+    settlement_date: date,
+    source_currency: CurrencyCode,
+    home_currency: CurrencyCode,
+    source_ids: tuple[str, ...] = (),
+) -> Decimal:
+    """Exact directed conversion of one source amount at settlement.
+
+    Pure seam for downstream consumers: no inversion, no nearest/prior-date
+    selection, no chaining, no rounding. Only a missing directed rate
+    prefixes ``source_ids`` onto the error's safe IDs.
+    """
+
+    if source_currency is home_currency:
+        return source_amount
+    key = (settlement_date, source_currency, home_currency)
+    try:
+        rate = build_directed_rate_index(rates)[key]
+    except KeyError:
+        raise EventNormalizationError(
+            "fx_rate_missing",
+            source_ids + (f"{key[0].isoformat()}:{key[1].value}:{key[2].value}",),
+        ) from None
+    return source_amount * rate
 
 _AMENDMENT_FACT_TYPES = frozenset(
     {
@@ -205,23 +266,7 @@ class _Normalizer:
     # -- validation ---------------------------------------------------
 
     def _build_rate_index(self) -> None:
-        for rate in self.case.relevant_rates:
-            if not isinstance(rate, ExchangeRateRecord):
-                raise EventNormalizationError("invalid_rate_record", ())
-            key = (rate.rate_date, rate.from_currency, rate.to_currency)
-            if key in self._rate_index and self._rate_index[key] != rate.rate:
-                raise EventNormalizationError(
-                    "fx_rate_conflict",
-                    (f"{key[0].isoformat()}:{key[1].value}:{key[2].value}",),
-                )
-            if key in self._rate_index:
-                continue
-            if not rate.rate.is_finite() or rate.rate <= 0:
-                raise EventNormalizationError(
-                    "fx_rate_invalid",
-                    (f"{key[0].isoformat()}:{key[1].value}:{key[2].value}",),
-                )
-            self._rate_index[key] = rate.rate
+        self._rate_index = build_directed_rate_index(self.case.relevant_rates)
 
     def _validate(self) -> None:
         from buy_or_wait.domain import RequestCase as _RequestCase
