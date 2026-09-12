@@ -1,0 +1,103 @@
+{
+  "schema_version": "wp-02-oracle-v1",
+  "description": "Independent expected evidence decisions for the 16 reviewed images (evidence decision pack). Data-only oracle; not derived from production resolver output.",
+  "images": {
+    "image_01": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_253",
+      "amount": "4365000",
+      "currency": "IDR"
+    },
+    "image_02": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_1442",
+      "amount": "100000",
+      "currency": "INR"
+    },
+    "image_03": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_1545",
+      "amount": "41272",
+      "currency": "INR"
+    },
+    "image_04": {
+      "fact_type": null,
+      "target_event_id": null,
+      "amount": null,
+      "currency": null,
+      "diagnostic": "unavailable_image_review"
+    },
+    "image_05": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_1786",
+      "amount": "822.05",
+      "currency": "INR"
+    },
+    "image_06": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_3051",
+      "amount": "1995",
+      "currency": "INR"
+    },
+    "image_07": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_3231",
+      "amount": "8528.10",
+      "currency": "INR"
+    },
+    "image_08": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_4535",
+      "amount": "15339",
+      "currency": "INR"
+    },
+    "image_09": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_5170",
+      "amount": "723",
+      "currency": "INR"
+    },
+    "image_10": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_6033",
+      "amount": "79679.26",
+      "currency": "INR"
+    },
+    "image_11": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_6859",
+      "amount": "3650",
+      "currency": "INR"
+    },
+    "image_12": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_7307",
+      "amount": "33.50",
+      "currency": "USD"
+    },
+    "image_13": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_7941",
+      "amount": "2298",
+      "currency": "INR"
+    },
+    "image_14": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_9421",
+      "amount": "4543",
+      "currency": "INR"
+    },
+    "image_15": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_9806",
+      "amount": "9968",
+      "currency": "INR"
+    },
+    "image_16": {
+      "fact_type": "event_amount",
+      "target_event_id": "event_10521",
+      "amount": "393.22",
+      "currency": "INR"
+    }
+  }
+}

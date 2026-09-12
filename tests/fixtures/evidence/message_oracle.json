@@ -1,0 +1,188 @@
+{
+  "description": "Independent expected evidence decisions for the 17 sample messages (evidence decision pack). Data-only oracle; not derived from production resolver output.",
+  "sample_messages": {
+    "message_01": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": "42750000",
+          "currency": "IDR",
+          "effective_date": "2025-08-15",
+          "fact_type": "recurring_amount_amendment",
+          "target_event_id": "event_136"
+        }
+      ]
+    },
+    "message_02": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": null,
+          "currency": null,
+          "effective_date": null,
+          "fact_type": "recurrence_confirmation",
+          "target_event_id": "event_253"
+        }
+      ]
+    },
+    "message_03": {
+      "diagnostics": [
+        "unavailable_credit_no_cash"
+      ],
+      "facts": []
+    },
+    "message_04": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": "1037.52",
+          "currency": "EUR",
+          "effective_date": null,
+          "fact_type": "next_cycle_amount_amendment",
+          "target_event_id": "event_471"
+        }
+      ]
+    },
+    "message_05": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": null,
+          "currency": null,
+          "effective_date": "2024-09-23",
+          "fact_type": "settlement_date_replacement",
+          "target_event_id": "event_578"
+        }
+      ]
+    },
+    "message_06": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": "1422.85",
+          "currency": "EUR",
+          "effective_date": null,
+          "fact_type": "next_cycle_amount_amendment",
+          "target_event_id": "event_643"
+        }
+      ]
+    },
+    "message_07": {
+      "diagnostics": [
+        "unavailable_credit_no_cash"
+      ],
+      "facts": []
+    },
+    "message_08": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": "38760000",
+          "currency": "IDR",
+          "effective_date": null,
+          "fact_type": "recurring_amount_amendment",
+          "target_event_id": "event_941"
+        }
+      ]
+    },
+    "message_09": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": null,
+          "currency": null,
+          "effective_date": null,
+          "fact_type": "recurrence_stop",
+          "target_event_id": "event_1002"
+        }
+      ]
+    },
+    "message_10": {
+      "diagnostics": [
+        "unresolved_required_debit_blocks"
+      ],
+      "facts": [
+        {
+          "amount": "2717",
+          "currency": "EUR",
+          "effective_date": "2025-08-15",
+          "fact_type": "recurrence_resume",
+          "target_event_id": "event_1192"
+        }
+      ]
+    },
+    "message_11": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": "1661",
+          "currency": "EUR",
+          "effective_date": null,
+          "fact_type": "confirmed_future_credit",
+          "target_event_id": null
+        }
+      ]
+    },
+    "message_12": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": "63952",
+          "currency": "INR",
+          "effective_date": null,
+          "fact_type": "recurring_expense_amendment",
+          "target_event_id": "event_1371"
+        }
+      ]
+    },
+    "message_13": {
+      "diagnostics": [
+        "unresolved_transfer_pair"
+      ],
+      "facts": []
+    },
+    "message_14": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": "8640",
+          "currency": "INR",
+          "effective_date": null,
+          "fact_type": "pending_credit",
+          "target_event_id": "event_1785"
+        }
+      ]
+    },
+    "message_15": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": "369.6",
+          "currency": "EUR",
+          "effective_date": null,
+          "fact_type": "unrealized_value",
+          "target_event_id": "event_1960"
+        }
+      ]
+    },
+    "message_16": {
+      "diagnostics": [
+        "unavailable_credit_no_cash"
+      ],
+      "facts": []
+    },
+    "message_17": {
+      "diagnostics": [],
+      "facts": [
+        {
+          "amount": "33550",
+          "currency": "INR",
+          "effective_date": null,
+          "fact_type": "settled_one_time_credit",
+          "target_event_id": "event_2165"
+        }
+      ]
+    }
+  },
+  "schema_version": "wp-02-oracle-v1"
+}

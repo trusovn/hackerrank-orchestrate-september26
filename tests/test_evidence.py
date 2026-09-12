@@ -233,8 +233,23 @@ class CarrierCoverageTests(unittest.TestCase):
         self.assertFalse(clean.blocks_downstream)
 
 
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "evidence"
+
+
+def _load_oracle(name: str) -> dict:
+    import json
+
+    path = FIXTURES / name
+    if not path.exists():
+        raise unittest.SkipTest("evidence oracle fixture not available")
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
 class SampleMessageOracleTests(unittest.TestCase):
-    """AC-02: the 17 sample messages match the evidence decision pack."""
+    """AC-02: the 17 sample messages match the data-only evidence oracle."""
+
+    ORACLE = _load_oracle("message_oracle.json")["sample_messages"]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -368,25 +383,9 @@ class SampleMessageOracleTests(unittest.TestCase):
 
 
 class ImageOracleTests(unittest.TestCase):
-    """AC-03: 15 accepted image amounts plus the image_04 failure."""
+    """AC-03: 15 accepted image amounts plus the image_04 failure (data oracle)."""
 
-    EXPECTED: dict[str, tuple[str, str, str]] = {
-        "image_01": ("event_253", "4365000", "IDR"),
-        "image_02": ("event_1442", "100000", "INR"),
-        "image_03": ("event_1545", "41272", "INR"),
-        "image_05": ("event_1786", "822.05", "INR"),
-        "image_06": ("event_3051", "1995", "INR"),
-        "image_07": ("event_3231", "8528.10", "INR"),
-        "image_08": ("event_4535", "15339", "INR"),
-        "image_09": ("event_5170", "723", "INR"),
-        "image_10": ("event_6033", "79679.26", "INR"),
-        "image_11": ("event_6859", "3650", "INR"),
-        "image_12": ("event_7307", "33.50", "USD"),
-        "image_13": ("event_7941", "2298", "INR"),
-        "image_14": ("event_9421", "4543", "INR"),
-        "image_15": ("event_9806", "9968", "INR"),
-        "image_16": ("event_10521", "393.22", "INR"),
-    }
+    EXPECTED = _load_oracle("image_oracle.json")["images"]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -406,13 +405,18 @@ class ImageOracleTests(unittest.TestCase):
                             cls.image_facts[source.carrier_id] = fact
 
     def test_fifteen_accepted_amounts(self) -> None:
-        for image_id, (event_id, amount, currency) in self.EXPECTED.items():
+        for image_id, expected in self.EXPECTED.items():
+            if expected["fact_type"] is None:
+                continue
             self.assertIn(image_id, self.image_facts, image_id)
             fact = self.image_facts[image_id]
-            self.assertEqual(fact.fact_type, EvidenceFactType.EVENT_AMOUNT, image_id)
-            self.assertEqual(fact.target_event_id, event_id, image_id)
-            self.assertEqual(fact.amount, Decimal(amount), image_id)
-            self.assertEqual(fact.currency, CurrencyCode[currency], image_id)
+            self.assertEqual(fact.fact_type, EvidenceFactType(expected["fact_type"]), image_id)
+            self.assertEqual(fact.target_event_id, expected["target_event_id"], image_id)
+            self.assertEqual(fact.amount, Decimal(expected["amount"]), image_id)
+            self.assertEqual(fact.currency, CurrencyCode[expected["currency"]], image_id)
+
+    def test_image_04_unresolved_per_oracle(self) -> None:
+        self.assertNotIn("image_04", self.image_facts)
 
 
 class TargetingAndDurationTests(unittest.TestCase):

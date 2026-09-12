@@ -1,8 +1,9 @@
 # WP-03 — Evidence Strategy Gate
 
-Status: **READY — DEPENDENCY GATED; WP-02 is still in implementation/review**
+Status: **ACCEPTED** — final verdict ACCEPT (2026-09-12), see Review Record
 Authority: [`master-plan.md`](master-plan.md), WP-03
-Depends on: WP-02 (**do not implement against its in-progress interface**)
+Depends on: WP-02 (**accepted**; dependency gate below confirmed its final
+evidence API, diagnostics, oracle fixtures, and independent `ACCEPT` verdict)
 Readiness route: standalone guided preflight — confirm the final WP-02 evidence
 API, diagnostics, oracle fixtures, and independent `ACCEPT` verdict
 
@@ -311,3 +312,40 @@ bytes. No live, networked, credentialed, or paid verification is authorized.
   first.
 - Required follow-on: immediately after implementation or correction, hand the
   completed bytes to a fresh independent acceptance reviewer.
+
+## Review Record
+
+Implementation (2026-09-12): `code/evaluation/evidence_strategy.py` (offline,
+standard-library-only assessor with strict carrier accounting, ordered
+decision rules, atomic JSON writer, and CLI), `tests/test_evidence_strategy.py`,
+data-only oracle fixtures `tests/fixtures/evidence/{message,image}_oracle.json`
+(WP-02 expectations moved out of test code), the generated
+`code/evaluation/evidence_strategy.json`, and `docs/project-map.md` update.
+Full-dataset run selected `offline` with 231 carriers (215 messages, 16
+images) and 33/33 exact oracle matches.
+
+First independent review (2026-09-12) returned `CHANGES_REQUESTED` with
+finding F-01: the oracle comparison was value-blind — expected amounts,
+currencies, effective dates, and target event IDs were discarded, so a
+corrupted oracle value could certify a WP-02 defect as offline-clean (AC-03
+"matches exactly" violated; the finite-risk "corrupt one oracle fact" probe
+passed silently).
+
+Correction (same implementation thread): `_oracle_value_mismatch` added —
+every value field the oracle records (amount, currency, `effective_date`,
+`target_event_id`) is compared per carrier for all 33 oracle entries in both
+message and image shapes, failing on any field mismatch. Four fail-first
+corruption regressions added (amount, currency, target event, diagnostic
+code); the fake fact builder now carries all value fields. Oracle fixture
+currencies completed to the accepted WP-02 values.
+
+Fresh independent review (2026-09-12): independent re-probe of F-01 —
+corrupted `message_04` amount 999999 in an oracle copy → CLI exit 1
+(`oracle_mismatch:message_04:values:...:amount:'1037.52'!='999999'`), no
+report written, checked-in report bytes unchanged. Real-dataset run with the
+value-completed fixtures stayed `offline` (231 carriers, 33/33) and CLI output
+is byte-identical to the checked-in report. Provider-reachability probe (fake
+provider patched to raise) confirmed zero model calls; redaction scan clean.
+Aggregate gate on final bytes: `python3 -m unittest discover -s tests -p
+'test_*.py'` — 115 OK (skipped=1); `git diff --check` clean; `compileall`
+clean. Verdict: **ACCEPT** (AC-01–AC-07 satisfied; no open findings).

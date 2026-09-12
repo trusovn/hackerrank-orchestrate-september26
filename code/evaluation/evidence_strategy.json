@@ -1,0 +1,31 @@
+{
+  "carrier_counts": {
+    "image": 16,
+    "message": 215,
+    "total": 231
+  },
+  "classifications": {
+    "blocking_unbounded_debit": 0,
+    "incorrect_optimistic": 0,
+    "intentional_conservative": 36,
+    "model_eligible_unresolved": 0,
+    "validated_fact": 195
+  },
+  "dataset_fingerprint": "755b9bc234b6469ccacdeee937f95a028910da107030fc84938bad29f322da87",
+  "decision_reason": "Every carrier has an explicit accepted disposition and the independent oracle matches exactly with zero incorrect optimistic facts and zero model-eligible unresolved carriers; a provider trial has no measured validated coverage to add.",
+  "model_eligible_carriers": [],
+  "model_usage": {
+    "calls": 0,
+    "estimated_cost_usd": 0.0,
+    "input_tokens": 0,
+    "output_tokens": 0
+  },
+  "oracle": {
+    "match": 33,
+    "mismatch": 0
+  },
+  "rejected_alternative": "offline (already selected; a provider trial would add cost and risk with no measured coverage gain)",
+  "resolver_contract": "wp-02-accepted-2026-09-12",
+  "schema_version": "wp-03-v1",
+  "selected_strategy": "offline"
+}

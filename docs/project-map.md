@@ -44,7 +44,7 @@ when a concrete implementation requires it.
 | [`../README.md`](../README.md) | Human quick start and submission overview. | `python3 code/main.py`. |
 | [`../code/main.py`](../code/main.py) | Thin batch CLI/composition entry point; product behavior is not implemented. | `python3 code/main.py`. |
  | [`../code/buy_or_wait/`](../code/buy_or_wait/) | Repository-owned product Python: provider-neutral AI boundary, immutable domain contract, strict dataset repository, and deterministic typed-evidence resolver. | `buy_or_wait.ai_boundary`, `buy_or_wait.domain`, `buy_or_wait.repository`, `buy_or_wait.evidence`. |
-| [`../code/evaluation/`](../code/evaluation/) | Evaluation runner placeholder and usage-report source packaged under `evaluation/`. | `code/evaluation/main.py`; not runnable as an eval yet. |
+| [`../code/evaluation/`](../code/evaluation/) | Evaluation runner and usage-report source packaged under `evaluation/`; `evidence_strategy.py` implements the WP-03 offline evidence-strategy gate. | `python3 code/evaluation/evidence_strategy.py --dataset dataset --output code/evaluation/evidence_strategy.json` (offline, deterministic; regenerates `evidence_strategy.json`). |
 | [`../dataset/`](../dataset/) | Supplied participant-facing input and blank output template. Do not modify inputs. | CSV files and `media/images/`. |
 | [`../tests/`](../tests/) | Standard-library unit and contract tests mirroring source or repository contracts. | `python3 -m unittest ...`. |
 | [`ai-foundation.md`](ai-foundation.md) | Persisted AI boundary, validation, retry, observability, and side-effect constraints. | Guidance for model-owning features. |
@@ -53,6 +53,7 @@ when a concrete implementation requires it.
 | [`wp-01-plan.md`](wp-01-plan.md) | Implementation-ready contract for WP-01 domain types, strict dataset loading, joined request cases, and repository validation. | Implement after the WP-00 freshness gate passes. |
 | [`wp-02-plan.md`](wp-02-plan.md) | Dependency-gated implementation contract for typed evidence extraction, validation, targeting, and conservative resolution. | Implement only after the corrected WP-01 contract receives fresh independent acceptance. |
 | [`wp-03-plan.md`](wp-03-plan.md) | Dependency-gated contract for measuring the accepted offline evidence path and deciding whether a separately authorized provider trial is justified. | Implement only after WP-02 receives fresh independent acceptance; may defer until after WP-08. |
+| [`wp-04-plan.md`](wp-04-plan.md) | Prerequisite-gated implementation contract for lifecycle normalization, pending reserves, source accounting, and exact directed settlement-date FX. | Correct and re-accept the WP-02 standalone-fact settlement-date contract, then implement independently of in-progress optional WP-03. |
 | [`foundation-plan.md`](foundation-plan.md) | Historical bootstrap decisions, not live operating guidance. | Context only. |
 | [`foundation-review.md`](foundation-review.md) | Latest independent-style readiness record and observed commands. | Readiness verdict and gaps. |
 | `output.csv` | Generated final predictions at repository root; absent until a solution run creates it. | Submission artifact. |
@@ -69,7 +70,8 @@ when a concrete implementation requires it.
 | Agent-facing document or navigation rule | [`../tests/test_agent_foundation_contract.py`](../tests/test_agent_foundation_contract.py) | `python3 -m unittest tests.test_agent_foundation_contract` |
 | Product/data discovery or master-plan preparation | [`initial-analysis/README.md`](initial-analysis/README.md) and its TODO runbook | Recheck dataset contract, local links, and `git diff --check` |
 | New product behavior | Owning module under `code/buy_or_wait/`; no implemented feature precedent exists yet | New focused test, then full unit suite |
-| Evaluation behavior or usage accounting | [`../code/evaluation/main.py`](../code/evaluation/main.py) and [`../code/evaluation/usage_report.md`](../code/evaluation/usage_report.md); both remain placeholders | Feature-owned eval command must be added with implementation |
+| Evaluation behavior or usage accounting | [`../code/evaluation/main.py`](../code/evaluation/main.py) and [`../code/evaluation/usage_report.md`](../code/evaluation/usage_report.md); usage report remains a placeholder | Feature-owned eval command must be added with implementation |
+| Evidence-strategy assessment | [`../code/evaluation/evidence_strategy.py`](../code/evaluation/evidence_strategy.py) and [`../tests/test_evidence_strategy.py`](../tests/test_evidence_strategy.py) with data-only oracles under [`../tests/fixtures/evidence/`](../tests/fixtures/evidence/) | `python3 -m unittest tests.test_evidence_strategy` |
 
 ## Placement Rules
 
