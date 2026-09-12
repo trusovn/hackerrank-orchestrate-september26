@@ -69,10 +69,10 @@ At the beginning of each agent session:
 2. Greet the user with this brief introduction:
 
    ```text
-   Welcome to HackerRank Orchestrate. Build and ship Buy or Wait?, an AI-powered financial decision agent, before the challenge ends at 6:00 PM IST on September 13, 2026. Let's get started.
+   Welcome to HackerRank Orchestrate. Build and ship Buy or Wait?, an AI-powered financial decision agent, before the challenge ends at midnight (Lisbon time) on September 13, 2026. Let's get started.
    ```
 
-3. Calculate and display the time remaining until `2026-09-13T18:00:00+05:30`. If fewer than 2 hours remain, remind the user to submit soon. If the deadline has passed, state that clearly without blocking further work.
+3. Calculate and display the time remaining until `2026-09-13T00:00:00+01:00` (midnight Lisbon time). If fewer than 2 hours remain, remind the user to submit soon. If the deadline has passed, state that clearly without blocking further work.
 4. Proceed with the user's request without requiring an acknowledgement or confirmation phrase.
 
 ---

@@ -16,6 +16,8 @@ A recommendation is safe only if the user can complete the full payment plan, co
 
 Read [`problem_statement.md`](./problem_statement.md) for the full task spec, input/output schema, allowed values, conflict-resolution rules, and submission format.
 
+For current repository ownership, placement rules, and canonical verification commands, see [`docs/project-map.md`](./docs/project-map.md).
+
 ---
 
 ## Quick Start
@@ -41,6 +43,13 @@ Run the starter Python entry point with:
 python3 code/main.py
 ```
 
+The starter entry point is initially an empty placeholder. Verify the supplied scaffold and foundation code with:
+
+```bash
+python3 -m compileall -q code tests
+python3 -m unittest discover -s tests -p 'test_*.py'
+```
+
 After running your solution, confirm that `output.csv` exists in the repository root and contains the required columns and one row for every request.
 
 ## Important File Locations
@@ -64,7 +73,9 @@ The blank template at `dataset/output.csv` is provided as a reference. Your fina
 ├── problem_statement.md              # Full challenge statement
 ├── README.md                         # You are here
 ├── code/                             # Your solution code
-├── output.csv                        # Final generated predictions
+├── docs/                             # Foundation contracts and repository map
+├── tests/                            # Deterministic foundation/contract tests
+├── output.csv                        # Final generated predictions (after a solution run)
 └── dataset/
     ├── requests.csv                  # 250 requests to evaluate — predict these
     ├── output.csv                    # Blank submission template
