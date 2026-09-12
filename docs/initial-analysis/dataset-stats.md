@@ -1,5 +1,11 @@
 # Initial Dataset Analysis — Buy or Wait?
 
+> **Supplemental / lower authority.** Counts and derived rules in this note
+> are leads, not the canonical profile or behavior contract. Scope/count
+> differences and behavior conflicts are catalogued under `IA-006` in
+> [`05-todo-and-analysis-runbook.md`](05-todo-and-analysis-runbook.md). Re-run
+> the assigned deterministic checks before relying on a disputed value.
+
 Statistical characterization of `dataset/` (participant-facing files only). All
 numbers computed directly from the CSVs; derived insight for the solution
 design follows each section. Analysis date: 2026-09-12.

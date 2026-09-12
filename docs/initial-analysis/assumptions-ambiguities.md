@@ -1,5 +1,11 @@
 # Assumptions & Ambiguities — Buy or Wait?
 
+> **Supplemental / lower authority.** This note is research input, not a
+> decision record. Its useful discriminators and conflicts were reconciled into
+> [`05-todo-and-analysis-runbook.md`](05-todo-and-analysis-runbook.md) under
+> `IA-006`. Keep claims here as hypotheses until the numbered packet records a
+> reproducible resolution.
+
 Companion to [`dataset-stats.md`](dataset-stats.md). Each entry lists the
 ambiguous rule, the interpretations considered, the assumption adopted for the
 solution, and — most importantly — **which public samples (`request_01..25`)

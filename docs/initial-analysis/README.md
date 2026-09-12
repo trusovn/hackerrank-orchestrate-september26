@@ -42,20 +42,24 @@ do not reinterpret the higher-authority source.
 | [`04-open-questions-and-hypotheses.md`](04-open-questions-and-hypotheses.md) | P0 uncertainties, current hypotheses, and resolution evidence | Defining financial semantics or reviewing assumptions |
 | [`05-todo-and-analysis-runbook.md`](05-todo-and-analysis-runbook.md) | Ordered follow-up work, cheap-model routing, outputs, and plan gate | Choosing the next task or preparing the master plan |
 
-### Concurrent Supplemental Drafts
+### Supplemental Research Notes
 
-Two additional files appeared in the shared worktree during this analysis:
+Three additional files were created independently of the numbered packet:
 
 - [`dataset-stats.md`](dataset-stats.md)
 - [`assumptions-ambiguities.md`](assumptions-ambiguities.md)
+- [`rev-eng.md`](rev-eng.md)
 
-They contain useful deeper probes and sample-discriminator ideas, but they have
-not been reconciled with this packet and include some asserted assumptions and
-counts with different scopes. Treat them as research input, not current source
-of truth. In particular, do not adopt latest-prior/chained FX fallback, ignore a
-pending debit, or continue/stop recurring salary solely from those drafts;
-resolve those claims against the authoritative contract and reproducible sample
-experiments first. Task `IA-006` in the runbook owns reconciliation.
+They contain useful deeper probes, sample-discriminator ideas, and an
+unpublished simulator's partial results. Treat them as lower-authority research
+input, not current source of truth: several claims use different scopes, some
+conflict with one another, and some label approximate reverse-engineering as
+confirmed. The document-level reconciliation is recorded under `IA-006` in
+the runbook; unresolved counts and behavior claims remain assigned to explicit
+follow-up tasks there. In particular, do not adopt latest-prior/chained FX
+fallback, ignore a pending debit, choose an ambiguous image total, continue or
+stop recurring salary, or copy a claimed forecast algorithm solely from these
+notes.
 
 ## Executive Finding
 

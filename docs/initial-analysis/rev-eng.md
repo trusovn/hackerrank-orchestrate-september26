@@ -1,5 +1,12 @@
 # Reverse-Engineering Financial-State And Forecasting Semantics
 
+> **Supplemental / lower authority.** This note records useful sample traces
+> from a scratch simulator that is not stored in the repository. Its exact
+> matches are leads for reproducible fixtures; its inferred engine semantics
+> are not confirmed product rules. Coverage, conflicts, and follow-up owners
+> are recorded under `IA-006` in
+> [`05-todo-and-analysis-runbook.md`](05-todo-and-analysis-runbook.md).
+
 Analysis of the 25 solved examples in `dataset/sample_requests.csv`, traced through each
 user's profile (`financial_profiles.csv`), event history (`financial_events.csv`), messages
 (`messages.csv`), images (`images.csv` + `dataset/media/images/`), and payment options

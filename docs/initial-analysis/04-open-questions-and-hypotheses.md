@@ -36,6 +36,10 @@ organizer/environment unknowns that may remain unavailable.
   the current corpus does not directly resolve request-day ordering. Solved wait
   cases often pay on a confirmed salary date, implying same-day settled salary
   can fund that payment.
+- **Supplemental claim:** `rev-eng.md` asserts a daily ledger with later-day
+  salary credits before debits, but its simulator is unavailable and its exact
+  safe-amount reconstruction has material residuals. Treat this as an
+  experiment candidate, not a resolution (`REC-09`).
 - **Status:** UNRESOLVED.
 
 ### FIN-003 — Recurrence Detection
@@ -111,6 +115,11 @@ organizer/environment unknowns that may remain unavailable.
   plus pending refund; cancelled charge plus settled replacement; settled charge
   plus pending disputed duplicate; investment purchase/valuation/sale; work
   expense/reimbursement; internal transfer pair.
+- **Supplemental conflict:** one note suggests ignoring a pending
+  possible-duplicate debit while another alternates between reserving it
+  immediately and applying it on settlement. Pending-debit reservation remains
+  the authoritative baseline; the duplicate lifecycle and timing still need a
+  focused decision (`REC-06`).
 - **Resolution:** Create an explicit decision matrix and focused fixture for each
   observed lifecycle pattern.
 - **Status:** PARTIALLY RESOLVED.
@@ -139,6 +148,10 @@ organizer/environment unknowns that may remain unavailable.
 - **Working hypothesis:** Use `Decimal`, multiply using the exact supplied
   direction/rate on settlement date, keep internal precision through simulation,
   and round only at currency/output boundaries.
+- **Rejected supplemental expansion:** latest-prior fallback and multi-hop
+  chaining are not needed for observed foreign events and are not authorized by
+  the supplied exact dated-pair rule (`REC-07`). Missing required rates should
+  fail validation rather than silently selecting another date or path.
 - **Resolution:** Use foreign-currency sample timelines to identify the expected
   rounding point and scale.
 - **Status:** UNRESOLVED.
@@ -205,6 +218,9 @@ organizer/environment unknowns that may remain unavailable.
   never below `minimum_allowed_amount`.
 - **Evidence:** Only three solved examples use changes, so this branch is weakly
   supervised.
+- **Supplemental claim:** the action ID is the latest historical occurrence and
+  the change applies series-wide. This explains the three examples but remains
+  underdetermined and must not be treated as confirmed (`REC-15`).
 - **Resolution:** Fully reconstruct `request_06`, `request_11`, and
   `request_21`, then add boundary fixtures.
 - **Status:** UNRESOLVED.
@@ -231,6 +247,9 @@ organizer/environment unknowns that may remain unavailable.
 - **Resolution:** Complete the independent review in
   [`03-evidence-catalog.md`](03-evidence-catalog.md), especially images 04, 05,
   07, and 14.
+- **Known conflict:** supplemental notes select 704.05 for image 05, while the
+  evidence catalog currently prefers 822.05 and records 704.05 as a different
+  due-date amount. Preserve both candidates until adjudication (`REC-08`).
 - **Status:** PARTIALLY RESOLVED.
 
 ## P1 Engineering Decisions
