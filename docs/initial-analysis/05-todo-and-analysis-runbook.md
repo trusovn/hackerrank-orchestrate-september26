@@ -16,6 +16,27 @@ Never send the full 25,342-row event file to a model. Give a model only one
 evidence carrier or one prefiltered user/request case plus the exact output
 schema it must fill.
 
+### Agent Launch Defaults
+
+The tier describes how the result must be produced, not whether an AI coding
+agent may perform the task. **D0 does not require manual work:** use a cheap
+coding agent to write and run deterministic queries, and accept only results
+reproduced by code or direct source inspection. Manual action is required only
+when a task explicitly names a human or owner decision.
+
+| Tier | Current default agent | Reasoning | Escalation rule |
+|---|---|---|---|
+| **D0** | `gpt-5.6-luna` | medium | Use `gpt-5.6-terra` only if the deterministic implementation or debugging becomes non-trivial |
+| **C1** | `gpt-5.6-luna` | medium | Escalate only ambiguous classifications to `gpt-5.6-sol` with high reasoning |
+| **V1** | `gpt-5.6-sol` with image access | high | Escalate only unresolved multi-total or low-legibility images to `gpt-6-astra` with high reasoning or explicit human review |
+| **H2** | `gpt-6-astra` | high | Use a human only when the task names an owner judgment or two evidence-supported policies remain tied |
+
+If a named model is unavailable, preserve the tier's capability and cost intent:
+use the cheapest coding-capable model for D0/C1, a vision-capable model for V1,
+and the strongest available reasoning model for H2. Every delegated task prompt
+should state the exact model, reasoning level, and whether human action is
+required so the recipient does not need this document open.
+
 ## Ordered TODOs
 
 ### Phase 0 — Preserve And Verify The Baseline
@@ -26,28 +47,34 @@ schema it must fill.
 - [x] **IA-002 / H2:** Perform first-pass visual review of all 16 images.
 - [x] **IA-003 / H2:** Inventory message scenario families and major financial
   unknowns.
-- [ ] **IA-004 / D0:** Run the repository dataset contract before further
+- [x] **IA-004 / D0:** Run the repository dataset contract before further
   analysis:
 
   ```text
   python3 -m unittest tests.test_repository_contract
   ```
 
-- [ ] **IA-005 / D0:** Record a dataset fingerprint or Git revision in any
+- [x] **IA-005 / D0:** Record a dataset fingerprint or Git revision in any
   future derived report so stale counts are detectable. Do not copy or mutate
-  dataset inputs.
+  dataset inputs. Recorded in
+  [`06-structural-reconciliation.md`](06-structural-reconciliation.md).
 - [x] **IA-006 / D0 + H2:** Reconcile the supplemental
   [`dataset-stats.md`](dataset-stats.md) and
   [`assumptions-ambiguities.md`](assumptions-ambiguities.md), plus
   [`rev-eng.md`](rev-eng.md), with the canonical packet at document level.
   Classify useful leads, map already-covered investigations, and name conflicts
   without promoting unreplicated claims. The register below is the result.
-- [ ] **IA-007 / D0:** Reproduce only the disputed structural counts in the
+- [x] **IA-007 / D0:** Reproduce only the disputed structural counts in the
   `IA-006` conflict register using a small checked-in or recorded query. State
   whether each count covers samples, evaluation requests, or both, and define
   installment end-date and maximum-month formulas. Record a dataset fingerprint
   with the result. This is a cheap deterministic check; it does not require a
-  model or full forecast replay.
+  model or full forecast replay. Reproduced by
+  [`../../tools/reconcile_structural_counts.py`](../../tools/reconcile_structural_counts.py)
+  with verdicts in
+  [`06-structural-reconciliation.md`](06-structural-reconciliation.md);
+  `REC-01` and `REC-04` were scope/column labeling gaps rather than count
+  errors, `REC-02`, `REC-03`, and `REC-13` supplemental claims were rejected.
 
 ## IA-006 Supplemental-Note Reconciliation
 
@@ -59,7 +86,7 @@ schema it must fill.
 | Narrow corpus probes in `dataset-stats.md` | Useful candidate assertions about flexible-series shape, lifecycle pairs, foreign-currency events, option eligibility, and evidence coverage | Reproduce disputed counts in `IA-007`; stable observed facts belong in `02-data-profile.md` and loader/contract fixtures |
 | Sample trace notes and mismatch clusters in `rev-eng.md` | Useful hypotheses and regression seeds; explicitly identifies cases where the scratch simulator was too optimistic | Rebuild traces reproducibly in `SO-001`–`SO-006`; use mismatch clusters to prioritize `FP-001`, `FP-002`, and `FP-004` |
 | Message and image interpretations across all three notes | Adds candidate typed facts and concrete ambiguous totals | Already covered by `EV-001`–`EV-007`; `03-evidence-catalog.md` remains the current inventory |
-| Proposed recurrence, salary-continuation, reserve, rounding, and same-day rules | Enumerates alternatives worth testing | Already covered by `FIN-002`–`FIN-009` and `FP-001`–`FP-004`, `FP-008`; these remain unresolved |
+| Proposed recurrence, salary-continuation, reserve, rounding, and same-day rules | Enumerates alternatives worth testing | Planning dispositions and bounded experiments are recorded in document 08; the actual `FP-001`–`FP-004` experiments remain deferred |
 | Proposed installment, partial, wait, and ranking semantics | Mostly restates the authoritative contract and highlights boundary samples | Contract stays in `01-contract-and-invariants.md`; `FP-005`, `SO-004`, `SO-005`, `EA-001`, and `EA-002` own verification |
 | Latest-occurrence event IDs and series-wide spending changes | Useful hypothesis for explaining the three change-enabled samples | `FIN-013` and `FP-006`; do not implement as confirmed behavior yet |
 | Output formatting and explanation templates | Useful golden-output inventory | `FIN-009`, `ENG-004`, `EA-001`, and `EA-002`; templates must remain fact-grounded and formatting must be derived exactly |
@@ -76,10 +103,10 @@ observations that would change calculations require reproducible evidence.
 | `REC-02` | `dataset-stats.md` says the option file covers only `request_01..request_99`, and `rev-eng.md` says 225 evaluation users remain; the canonical profile records 275 requests total, 250 evaluation users, and an option for every request | Reject the supplemental statements as inconsistent with the canonical integrity profile | `IA-007` may retain a direct coverage assertion |
 | `REC-03` | `dataset-stats.md` says only 42/250 request users have a future event, while the canonical profile records 141 future settlements across 122 combined users | Likely salary-only/evaluation-only scope was mislabeled as all future data | `IA-007` must split event type and sample/evaluation scope |
 | `REC-04` | `dataset-stats.md` says 19 pending/scheduled expenses land on the request date, while `02-data-profile.md` says no populated settlement date equals the request date | Likely `event_date` versus `settlement_date`; unsafe to infer same-day ordering from either wording | `IA-007` clarifies columns; `FP-003` resolves general ordering |
-| `REC-05` | `assumptions-ambiguities.md` argues that salary never continues without an explicit scheduled row/message, while the contract says to forecast recurring income and also forbids unsupported income | Material unresolved policy tension, not a confirmed sample result | `FIN-004A`, `FP-001`, `FP-008`, and multi-month sample traces |
-| `REC-06` | `dataset-stats.md` offers ignoring a pending possible-duplicate debit, while the higher-authority rule says to reserve pending debits; `rev-eng.md` additionally alternates between immediate reserve and settlement-date application | Do not ignore the debit solely because its description says “possible duplicate”; timing/lifecycle interaction remains open | Add the pending-duplicate row to the `FIN-006` matrix and resolve timing in `FP-003` |
+| `REC-05` | `assumptions-ambiguities.md` argues that salary never continues without an explicit scheduled row/message, while the contract says to forecast recurring income and also forbids unsupported income | Resolved for planning by the bounded `EXP-RV` income policies and conservative starting fallback in document 08; not claimed as an oracle match | Execute `FP-001` with the named multi-month sample traces |
+| `REC-06` | `dataset-stats.md` offers ignoring a pending possible-duplicate debit, while the higher-authority rule says to reserve pending debits; `rev-eng.md` additionally alternates between immediate reserve and settlement-date application | Reserve the possible-duplicate pending debit once until validated cancellation, duplication, or settlement; lifecycle and date fixtures are defined in document 08 | Execute the focused lifecycle fixtures and `FP-003` during implementation |
 | `REC-07` | Supplemental notes propose latest-prior rate fallback and chained FX conversion, but the contract requires the supplied dated rate/pair and the canonical profile observes a direct supplied pair for every foreign event | Reject fallback/chaining for the current corpus unless authoritative evidence later requires it | `FP-004` tests precision using exact supplied settlement-date pairs; missing required rates should be validation failures |
-| `REC-08` | Image 05 is selected as INR 704.05 in `rev-eng.md`, but `03-evidence-catalog.md` records INR 822.05 as the candidate and 704.05 as a different due-date figure | Unresolved multi-total image interpretation | `EV-004` and `EV-005`; do not hardcode either value before adjudication |
+| `REC-08` | Image 05 is selected as INR 704.05 in `rev-eng.md`, but `03-evidence-catalog.md` records INR 822.05 as the candidate and 704.05 as a different due-date figure | Resolved as INR 822.05: the supplied settlement date is after the document cutoff | Evidence and field selection recorded in `07-evidence-decision-pack.md` |
 | `REC-09` | `rev-eng.md` calls a mean-recent recurrence model, salary-before-debit ordering, reserve behavior, and a 30–60 day extra buffer “derived + verified,” while also admitting large safe-amount residuals and an unavailable scratch simulator | Downgrade all exact algorithm claims to hypotheses; directional matches do not establish the oracle | `SO-003`–`SO-006`, `FP-001`–`FP-004` |
 | `REC-10` | `rev-eng.md` says `earliest == request_date` iff `affordable_now`, contradicting the authoritative preference-independent rule and its own `request_12` example | Reject the biconditional; only `affordable_now -> earliest == request_date` is required | Preserve `request_12` in `EA-001`/`EA-002` |
 | `REC-11` | `rev-eng.md` says request 12's full amount is not safe today, but its own table and the solved row say full capacity exists on the request date and installments are selected because of preferences | Reject the prose claim | Reproducible `request_12` trace in `SO-005` |
@@ -97,29 +124,35 @@ dataset. Those deferred investigations stay unchecked above.
 
 ### Phase 1 — Produce Grounded Evidence Facts
 
-- [ ] **EV-001 / C1:** Classify the 25 sample-user messages first into the
+- [x] **EV-001 / C1:** Classify the 17 actual sample-user messages first into the
   closed scenarios in
   [`03-evidence-catalog.md`](03-evidence-catalog.md). Output typed facts and
-  explicit ignored facts; do not make affordability decisions.
-- [ ] **EV-002 / D0:** Validate extracted message IDs, event/request/user links,
+  explicit ignored facts; do not make affordability decisions. Completed in
+  [`07-evidence-decision-pack.md`](07-evidence-decision-pack.md); the other
+  eight sample users have no message.
+- [x] **EV-002 / D0:** Validate extracted message IDs, event/request/user links,
   currencies, dates, and enum values. Reject ambiguous target mappings.
+  Completed for the sample-message scope with fail-closed unresolved targets.
 - [ ] **EV-003 / C1:** Classify remaining messages in small batches grouped by
   normalized template. Reuse a result for equivalent bilingual/paraphrased
   templates only after identifiers, amounts, currencies, and dates are filled
   from the actual row.
-- [ ] **EV-004 / V1:** Run an independent one-image-at-a-time extraction pass.
+- [x] **EV-004 / V1:** Run an independent one-image-at-a-time extraction pass.
   Return all plausible financial totals with document labels, not just one
-  number.
-- [ ] **EV-005 / H2:** Adjudicate `image_04`, `image_05`, `image_07`, and
-  `image_14`; spot-check every other image candidate.
-- [ ] **EV-006 / D0:** Validate accepted image facts against the linked event's
-  expected currency, direction, status, description, and date.
+  number. All 16 carriers are recorded in the evidence decision pack.
+- [x] **EV-005 / H2:** Adjudicate `image_04`, `image_05`, `image_07`, and
+  `image_14`; spot-check every other image candidate. Fifteen amounts are
+  accepted; cropped `image_04` has an explicit fail-closed disposition.
+- [x] **EV-006 / D0:** Validate accepted image facts against the linked event's
+  expected currency, direction, status, description, and date. Completed in
+  the evidence decision pack.
 - [ ] **EV-007 / D0:** Turn accepted extraction examples into deterministic
   fixtures. Include malformed, empty, wrong-currency, unsupported fact,
   multiple-total, and provider-error cases.
 
-Deliverable: a reviewed evidence-fact catalog in this folder and, once product
-schemas exist, matching fixtures under `tests/fixtures/`.
+Planning deliverable: [`07-evidence-decision-pack.md`](07-evidence-decision-pack.md).
+Full evaluation-message classification and matching fixtures under
+`tests/fixtures/` remain implementation work.
 
 ### Phase 2 — Build The Sample Oracle
 
@@ -161,22 +194,31 @@ candidate decisions, expected fields, and unresolved mismatch IDs.
 - [ ] **FP-007 / H2:** Choose among statistically tied policies using the
   authoritative safer-interpretation rule and maintainability, not aesthetic
   preference.
-- [ ] **FP-008 / H2:** Resolve or explicitly accept every P0 decision in
+- [x] **FP-008 / H2:** Resolve or explicitly accept every P0 decision in
   [`04-open-questions-and-hypotheses.md`](04-open-questions-and-hypotheses.md).
+  Planning dispositions and safe fallbacks are recorded in
+  [`08-financial-semantics-decisions.md`](08-financial-semantics-decisions.md);
+  the actual `FP-001`–`FP-006` experiments remain early implementation work.
 
-Deliverable: a financial-semantics decision table with evidence, rejected
-alternatives, and a regression fixture for each selected rule.
+Planning deliverable:
+[`08-financial-semantics-decisions.md`](08-financial-semantics-decisions.md).
+Executable experiments and regression fixtures remain early implementation
+work.
 
 ### Phase 4 — Define Evaluation And Architecture Inputs
 
-- [ ] **EA-001 / D0:** Specify output-schema validation, row coverage, enums,
+- [x] **EA-001 / D0:** Specify output-schema validation, row coverage, enums,
   amount bounds, plan parsing, option matching, deadline checks, flexible-event
-  checks, and explanation non-emptiness.
-- [ ] **EA-002 / D0:** Define public-sample metrics: exact categorical match,
+  checks, and explanation non-emptiness. Document 08 records the decision and
+  output-validation tables.
+- [x] **EA-002 / D0:** Define public-sample metrics: exact categorical match,
   exact plan/change match, amount/date residuals, invariant failures, and
-  per-scenario breakdown.
-- [ ] **EA-003 / H2:** Set acceptance thresholds without pretending unknown
-  organizer weights are known.
+  per-scenario breakdown. Document 08 defines categorical, numeric, date,
+  plan/change, scenario, and optimism-risk reporting.
+- [x] **EA-003 / H2:** Set acceptance thresholds without pretending unknown
+  organizer weights are known. Start with zero contract/safety-fixture
+  violations and a complete 25-row explained-mismatch report; do not invent an
+  organizer weighting or percentage threshold.
 - [ ] **EA-004 / H2:** Decide which evidence operations actually require a
   model. Prefer deterministic parsing when it meets the evidence oracle.
 - [ ] **EA-005 / D0:** Define provider telemetry and final-run usage accounting

@@ -77,8 +77,8 @@ when a concrete implementation requires it.
 - Add fixtures under `tests/fixtures/` only for a concrete tested behavior.
 - Put testable repo-owned utilities, generators, validators, or local CLIs in
   `tools/`. Put thin human-invoked wrappers in `scripts/`.
-- Neither `tools/` nor `scripts/` exists today. Do not create either directory
-  until a real utility or wrapper is implemented.
+- `tools/` currently holds only the IA-007 reconciliation query; add entries
+  there only for real, working utilities.
 - Keep public-example evaluation and final-run usage accounting under
   `code/evaluation/` so they package as `evaluation/` inside `code.zip`.
 - Write generated predictions only to root `output.csv`; never overwrite
@@ -100,7 +100,7 @@ of these fields; do not register placeholders.
 
 | Path | Purpose | Invocation | Inputs | Outputs | Failure signals | Verification command |
 |---|---|---|---|---|---|---|
-| None | No repo-owned tool is implemented. | N/A | N/A | N/A | N/A | N/A |
+| [`../tools/reconcile_structural_counts.py`](../tools/reconcile_structural_counts.py) | Reproduces IA-007 structural counts (REC-01/02/03/04/13) and the dataset fingerprint | `python3 tools/reconcile_structural_counts.py` | Read-only access to `dataset/` | JSON report on stdout (fingerprint, per-REC counts); writes nothing | Nonzero exit / traceback on schema drift; `ValueError` when users/requests/events no longer map 1:1 | `python3 tools/reconcile_structural_counts.py` |
 
 The registry row and the utility's focused test must land with the tool. A
 human-facing wrapper should contain only invocation glue; testable logic belongs
@@ -116,8 +116,9 @@ in `tools/` or the owning product module.
   deterministic financial/policy checks accept it.
 - Secrets are environment-only and must not enter Git, logs, traces, datasets,
   or submission artifacts.
-- No CI, container, datastore, migration, generated-code workflow, `tools/`, or
-  `scripts/` directory exists or is currently justified.
+- No CI, container, datastore, migration, generated-code workflow, or
+  `scripts/` directory exists or is currently justified. `tools/` contains the
+  registered IA-007 reconciliation query only.
 - Use [`diagnostics.md`](diagnostics.md) for honest current failure coverage and
   explicit deferred runtime/evaluation diagnostics.
 - Initial corpus findings and P0 behavior questions are preserved in

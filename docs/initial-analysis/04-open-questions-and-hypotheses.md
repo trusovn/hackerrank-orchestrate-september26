@@ -8,6 +8,11 @@ resolved before the master plan. P1 items affect implementation quality, cost,
 or maintainability but do not redefine the product contract. P2 items are
 organizer/environment unknowns that may remain unavailable.
 
+Planning dispositions, decision tables, bounded experiments, conservative
+fallbacks, discriminating samples, and acceptance signals for the P0 set are
+recorded in
+[`08-financial-semantics-decisions.md`](08-financial-semantics-decisions.md).
+
 ## P0 Financial Semantics
 
 ### FIN-001 — Opening Balance Cutoff
@@ -18,9 +23,11 @@ organizer/environment unknowns that may remain unavailable.
 - **Working hypothesis:** The profile balance is the opening balance at the
   request boundary. Past settled rows are recurrence/evidence history only;
   only future obligations and inferred recurrences change it.
-- **Resolution:** Reconstruct several sample timelines both ways. The correct
-  interpretation should reproduce their `amount_safe_to_pay` values.
-- **Status:** UNRESOLVED, high confidence in hypothesis.
+- **Disposition:** Accept the supplied available balance as opening cash at the
+  request boundary. Do not replay settled history; use it only as evidence for
+  justified forecast inference.
+- **Status:** DECIDED FOR PLANNING — conservative rule; implementation
+  validation remains deferred.
 
 ### FIN-002 — Forecast Boundary And Same-Day Ordering
 
@@ -28,10 +35,10 @@ organizer/environment unknowns that may remain unavailable.
   dates ending on day 89? What happens when income, expense, and a proposed
   payment share a date?
 - **Impact:** Changes earliest safe dates and minimum intraday balances.
-- **Working hypothesis:** Evaluate the request-day payment first against the
-  opening balance; on later dates, settle confirmed credits and reserve debits
-  deterministically before testing a proposed end-of-day payment. Use a
-  conservative ordering if facts conflict.
+- **Selected rule:** Use the inclusive request-date through day-90 window,
+  reserve pending debits at opening, and use debit-before-credit then proposed
+  payment when intraday order is unknown. Explicit grounded timing overrides
+  the fallback.
 - **Evidence:** No supplied settlement date equals its user's request date, so
   the current corpus does not directly resolve request-day ordering. Solved wait
   cases often pay on a confirmed salary date, implying same-day settled salary
@@ -40,7 +47,10 @@ organizer/environment unknowns that may remain unavailable.
   salary credits before debits, but its simulator is unavailable and its exact
   safe-amount reconstruction has material residuals. Treat this as an
   experiment candidate, not a resolution (`REC-09`).
-- **Status:** UNRESOLVED.
+- **Disposition:** Bounded `EXP-DATE` compares only day 89/90 and the two
+  unknown same-day orders; the selected safe fallback is inclusive day 90 and
+  debit-first.
+- **Status:** DECIDED FOR PLANNING — bounded early experiment.
 
 ### FIN-003 — Recurrence Detection
 
@@ -54,9 +64,11 @@ organizer/environment unknowns that may remain unavailable.
   and amendments override history.
 - **Do not assume:** Every repeated description recurs, every five-row series is
   monthly, or every salary continues.
-- **Resolution:** Implement several policies as experiment configurations and
-  score their resulting safe amounts/dates on all 25 examples.
-- **Status:** UNRESOLVED and likely the largest accuracy risk.
+- **Disposition:** Use strict supported recurrence as the safe starting rule;
+  run the finite `EXP-RV` matrix of at most 12 global configurations during
+  implementation.
+- **Status:** DECIDED FOR PLANNING — bounded early experiment; largest retained
+  accuracy risk.
 
 ### FIN-004 — Conservative Variable-Spend Forecast
 
@@ -69,9 +81,10 @@ organizer/environment unknowns that may remain unavailable.
 - **Working hypothesis:** Aggregate variable essentials into cadence/category
   envelopes rather than recurring every individual historic purchase. Choose
   the most conservative policy that still matches the solved examples.
-- **Resolution:** Run a deterministic policy sweep and compare numeric residuals
-  and earliest-date errors against samples.
-- **Status:** UNRESOLVED.
+- **Disposition:** Start with the maximum comparable complete-cycle category
+  envelope and evaluate only the three `EXP-RV` variable policies. Missing
+  required numeric observations are never zero.
+- **Status:** DECIDED FOR PLANNING — bounded early experiment.
 
 ### FIN-004A — Recurring Income Beyond The Next Confirmed Credit
 
@@ -86,11 +99,11 @@ organizer/environment unknowns that may remain unavailable.
 - **Candidate policies:** project all strongly supported salary recurrences;
   project only one explicitly scheduled/confirmed credit; or project recurrence
   only when a message explicitly confirms continued employment/pay.
-- **Resolution:** Run all candidates across the 25 samples, especially cases
-  whose plans cross multiple salary dates. Record which outputs discriminate
-  rather than relying on qualitative arithmetic.
-- **Status:** UNRESOLVED. A concurrent draft argues for explicit-confirmation
-  only; that claim has not yet been reproduced.
+- **Disposition:** Start with confirmed future credits and explicitly ongoing
+  grounded income; do not extend next-only evidence. `EXP-RV` compares that
+  rule with strict recent history-supported continuation.
+- **Status:** DECIDED FOR PLANNING — bounded early experiment with the more
+  conservative income fallback.
 
 ### FIN-005 — Essential And Protected Expense Definition
 
@@ -102,7 +115,9 @@ organizer/environment unknowns that may remain unavailable.
 - **Working hypothesis:** All supported recurring debits remain in the baseline.
   Fixed and protected events cannot change. Flexible events remain at baseline
   unless an allowed spending action changes them.
-- **Status:** UNRESOLVED, high confidence in hypothesis.
+- **Disposition:** Accept the working hypothesis as the authoritative/
+  conservative baseline rule.
+- **Status:** DECIDED FOR PLANNING.
 
 ### FIN-006 — Event Status And Lifecycle Effects
 
@@ -120,9 +135,11 @@ organizer/environment unknowns that may remain unavailable.
   immediately and applying it on settlement. Pending-debit reservation remains
   the authoritative baseline; the duplicate lifecycle and timing still need a
   focused decision (`REC-06`).
-- **Resolution:** Create an explicit decision matrix and focused fixture for each
-  observed lifecycle pattern.
-- **Status:** PARTIALLY RESOLVED.
+- **Disposition:** Use the lifecycle/status matrix in document 08. Reserve each
+  pending debit once; never count unsettled credits or unrealized values; links
+  do not themselves prove cancellation, duplication, or cash neutrality.
+- **Status:** DECIDED FOR PLANNING — authoritative core plus conservative
+  synthetic-fixture boundaries.
 
 ### FIN-007 — Message Targeting And Amendment Duration
 
@@ -135,9 +152,13 @@ organizer/environment unknowns that may remain unavailable.
   currency, and effective date to select exactly one compatible series. Reject
   or conservatively ignore ambiguous mappings rather than amending multiple
   series.
-- **Resolution:** Produce expected typed facts and target series for all sample
-  messages, then all evaluation messages.
-- **Status:** UNRESOLVED.
+- **Resolution:** The 17 actual sample-user messages have typed expected facts
+  and deterministic target/duration rules in
+  [`07-evidence-decision-pack.md`](07-evidence-decision-pack.md). Require one
+  compatible same-user series; fail closed for ambiguous debits and add no cash
+  for ambiguous credits. Full evaluation-message classification is deferred to
+  implementation.
+- **Status:** DECIDED FOR PLANNING; corpus-wide empirical coverage deferred.
 
 ### FIN-008 — Foreign-Currency Precision
 
@@ -152,9 +173,10 @@ organizer/environment unknowns that may remain unavailable.
   chaining are not needed for observed foreign events and are not authorized by
   the supplied exact dated-pair rule (`REC-07`). Missing required rates should
   fail validation rather than silently selecting another date or path.
-- **Resolution:** Use foreign-currency sample timelines to identify the expected
-  rounding point and scale.
-- **Status:** UNRESOLVED.
+- **Disposition:** Use exact directed settlement-date rates and exact decimal
+  products with no intermediate money rounding. Missing required rates fail
+  validation; `EXP-NUM` may compare only the documented rounding stages.
+- **Status:** DECIDED FOR PLANNING — conservative rule plus bounded experiment.
 
 ### FIN-009 — General Numeric And Serialization Policy
 
@@ -165,9 +187,11 @@ organizer/environment unknowns that may remain unavailable.
 - **Working hypothesis:** Use exact decimal arithmetic; normalize negative zero;
   preserve necessary precision without grouping separators or scientific
   notation; format plan amounts consistently with supplied values.
-- **Resolution:** Derive golden formatting cases from all 25 samples and option
-  rows.
-- **Status:** UNRESOLVED.
+- **Disposition:** Use exact decimal arithmetic, floor certified capacity to
+  0.01 only at output, preserve supplied option amounts, and serialize plain
+  decimals under the document 08 table.
+- **Status:** DECIDED FOR PLANNING — conservative serialization rule with
+  implementation fixtures deferred.
 
 ### FIN-010 — `max_installment_months`
 
@@ -179,9 +203,10 @@ organizer/environment unknowns that may remain unavailable.
 - **Working hypothesis:** Treat it as maximum number of monthly installments,
   so `number_of_payments <= max_installment_months`, while separately enforcing
   completion date.
-- **Resolution:** Confirm every chosen sample installment under both
-  interpretations and inspect rejected near-boundary options.
-- **Status:** UNRESOLVED, high confidence in hypothesis.
+- **Disposition:** Treat the populated positive value as a payment-count cap;
+  blank means installments are ineligible. `EXP-CAP` compares only count versus
+  elapsed-duration interpretation and keeps count on a tie.
+- **Status:** DECIDED FOR PLANNING — bounded early experiment.
 
 ### FIN-011 — Earliest Full-Payment Search
 
@@ -192,8 +217,11 @@ organizer/environment unknowns that may remain unavailable.
 - **Working hypothesis:** Search every balance-changing date, plus request date,
   across the full forecast independently of preferences, spending changes, and
   completion deadline. Report the first date a standalone full payment is safe.
-- **Resolution:** Formalize and test against all sample dates.
-- **Status:** PARTIALLY RESOLVED from examples.
+- **Disposition:** Search every date in the fixed baseline window independently
+  of methods, changes, and deadline; report a safe later date even when it is
+  too late to authorize the recommendation.
+- **Status:** DECIDED FOR PLANNING — conservative rule with sample regression
+  cases named in document 08.
 
 ### FIN-012 — Partial-Payment Feasibility
 
@@ -202,9 +230,11 @@ organizer/environment unknowns that may remain unavailable.
   deducting the first payment?
 - **Working hypothesis:** Yes. Construction rules do not waive the global safety
   invariant. A syntactically eligible partial plan can still fail simulation.
-- **Resolution:** Add a derived case where standalone full capacity exists later
-  but the earlier partial debit makes the remainder unsafe.
-- **Status:** INFERRED with high confidence.
+- **Disposition:** The proposed counterexample is impossible under a common
+  additive baseline: before the later date only the already-certified safe
+  amount is paid, and afterward the trajectory equals the safe standalone full
+  payment. Keep independent schedule validation as a property/regression guard.
+- **Status:** AUTHORITATIVE/DECIDED FOR PLANNING.
 
 ### FIN-013 — Spending-Change Scope And Optimization
 
@@ -221,9 +251,11 @@ organizer/environment unknowns that may remain unavailable.
 - **Supplemental claim:** the action ID is the latest historical occurrence and
   the change applies series-wide. This explains the three examples but remains
   underdetermined and must not be treated as confirmed (`REC-15`).
-- **Resolution:** Fully reconstruct `request_06`, `request_11`, and
-  `request_21`, then add boundary fixtures.
-- **Status:** UNRESOLVED.
+- **Disposition:** Start with validated recurring-series scope, explicit floor
+  reductions, allowed stops, and at most three distinct series. `EXP-CHANGE`
+  compares series-wide versus next-occurrence scope on only the three change
+  samples and retains series-wide on a tie.
+- **Status:** DECIDED FOR PLANNING — bounded early experiment.
 
 ### FIN-014 — Complete Status/Method Mapping
 
@@ -236,21 +268,29 @@ organizer/environment unknowns that may remain unavailable.
 - **Remaining cases:** full safe but no accepted safe method; safe only after the
   deadline; wait plus changes; multiple equal change sets; partial allowed by
   request but rejected by user; installment safe but outside maximum months.
-- **Resolution:** Create a complete truth table before plan-generator design.
-- **Status:** PARTIALLY RESOLVED.
+- **Disposition:** Use the complete status/method table and published ranking in
+  document 08, including preference-only, late-only, changed-wait, and
+  no-complete-plan fallbacks.
+- **Status:** DECIDED FOR PLANNING — decision table complete; implementation
+  fixtures deferred.
 
 ### FIN-015 — Image Amount Selection
 
 - **Question:** Which visible financial field supplies each blank event amount?
 - **Impact:** Wrong gross/net, bill/balance, or before/after-due selection changes
   recurrence and safety.
-- **Resolution:** Complete the independent review in
-  [`03-evidence-catalog.md`](03-evidence-catalog.md), especially images 04, 05,
-  07, and 14.
-- **Known conflict:** supplemental notes select 704.05 for image 05, while the
-  evidence catalog currently prefers 822.05 and records 704.05 as a different
-  due-date amount. Preserve both candidates until adjudication (`REC-08`).
-- **Status:** PARTIALLY RESOLVED.
+- **Resolution:** The review in
+  [`07-evidence-decision-pack.md`](07-evidence-decision-pack.md) accepts 15
+  context-appropriate values and records fields, currencies, confidence, and
+  linkage checks. `image_04` remains cropped and therefore fails closed rather
+  than promoting its INR 2,854 item subtotal to a final charge. Its linked
+  debit settled before `request_19`, so the unresolved extraction is not
+  subtracted again and does not by itself invalidate that solved request; it
+  remains unavailable to amount-dependent forecasting.
+- **Resolved conflict:** `image_05` is INR 822.05 because its supplied
+  settlement date is after the document's 2026-02-06 cutoff; INR 704.05 is the
+  earlier due-date amount (`REC-08`).
+- **Status:** DECIDED FOR PLANNING; one explicit fail-closed carrier.
 
 ## P1 Engineering Decisions
 
@@ -268,7 +308,9 @@ current recommendation is:
 
 Compare deterministic OCR, multimodal extraction, and a hybrid against the 16
 verified images. Include provider failures, multiple-total ambiguity, latency,
-cost, reproducibility, and offline behavior.
+cost, reproducibility, and offline behavior. Defer whether the extractor returns
+one validated fact or labeled candidates for deterministic caller-side
+adjudication; do not let a model make the affordability decision.
 
 ### ENG-003 — Evaluation Design
 

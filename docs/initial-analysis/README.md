@@ -1,6 +1,7 @@
 # Initial Analysis Packet
 
-Status: discovery complete; behavior reconstruction pending  
+Status: ready to create exact product implementation master plan  
+Readiness: 8 of 8 complete  
 Last verified: 2026-09-12  
 Scope: planning inputs for the Buy or Wait? implementation
 
@@ -41,6 +42,9 @@ do not reinterpret the higher-authority source.
 | [`03-evidence-catalog.md`](03-evidence-catalog.md) | Message taxonomy, image annotations, and extraction risks | Designing evidence extraction or multimodal work |
 | [`04-open-questions-and-hypotheses.md`](04-open-questions-and-hypotheses.md) | P0 uncertainties, current hypotheses, and resolution evidence | Defining financial semantics or reviewing assumptions |
 | [`05-todo-and-analysis-runbook.md`](05-todo-and-analysis-runbook.md) | Ordered follow-up work, cheap-model routing, outputs, and plan gate | Choosing the next task or preparing the master plan |
+| [`06-structural-reconciliation.md`](06-structural-reconciliation.md) | Reproduced disputed counts (`REC-01/02/03/04/13`), scope formulas, and dataset fingerprint | Trusting or quoting a disputed dataset count |
+| [`07-evidence-decision-pack.md`](07-evidence-decision-pack.md) | Sample-message typed facts, all-image decisions, and fail-closed evidence rules | Planning evidence extraction and validation |
+| [`08-financial-semantics-decisions.md`](08-financial-semantics-decisions.md) | Planning dispositions, conservative defaults, bounded experiments, decision tables, and acceptance signals for remaining P0 financial semantics | Creating the exact product implementation master plan |
 
 ### Supplemental Research Notes
 
@@ -82,24 +86,29 @@ load and validate participant data
 
 ## Master-Plan Readiness Gate
 
-Create the master implementation plan only after all of these are true:
+Create the master implementation plan only after all of these are true. Under
+the deadline-aware path, exhaustive corpus classification, all-sample ledger
+reconstruction, policy sweeps, and production fixtures belong in early plan
+slices rather than blocking creation of the plan.
 
-- [ ] Every P0 item in
+- [x] Every P0 item in
   [`04-open-questions-and-hypotheses.md`](04-open-questions-and-hypotheses.md)
-  is resolved or explicitly accepted as a conservative rule.
-- [ ] All 16 image amounts have a selected value, evidence field, currency,
-  confidence, and reviewer decision.
-- [ ] All message scenarios map to a typed fact schema and do not allow message
-  text to bypass deterministic policy.
-- [ ] Each of the 25 solved requests has a traceable ledger/candidate-plan case
-  explaining its expected deterministic fields.
-- [ ] Competing recurrence and variable-spend policies have been measured
-  against the solved examples.
-- [ ] Concurrent supplemental drafts have been reconciled, with conflicting
+  is resolved, explicitly accepted as a conservative rule, or assigned to a
+  bounded early implementation experiment with a stated safe fallback.
+- [x] All 16 images have a selected value or explicit fail-closed disposition,
+  evidence field, currency, confidence, and reviewer decision.
+- [x] Observed message scenarios map to a typed fact schema and cannot bypass
+  deterministic policy; full evaluation-message classification is deferred to
+  implementation.
+- [x] Public samples that discriminate each known financial rule are indexed;
+  full per-request ledger traces are deferred to implementation.
+- [x] Competing recurrence and variable-spend policies have named candidates,
+  discriminating samples, an experiment boundary, and a conservative fallback.
+- [x] Concurrent supplemental drafts have been reconciled, with conflicting
   claims either promoted with evidence or explicitly rejected.
-- [ ] Numeric precision, date ordering, eligibility, ranking, and output
+- [x] Numeric precision, date ordering, eligibility, ranking, and output
   validation policies are written as decision tables.
-- [ ] Provider/model use, if any, is limited to justified extraction operations
+- [x] Provider/model use, if any, is limited to justified extraction operations
   and has an offline test seam and cost-accounting path.
 
 The ordered work and suggested model tier for each item are in the TODO

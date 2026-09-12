@@ -114,19 +114,21 @@ accepted.
 | `image_11` | `request_73` | `event_6859` | Hospital bill payable | INR | 3,650 | high | Amount payable/balance |
 | `image_12` | `request_78` | `event_7307` | Taxi fare | USD | 33.50 | high | Total fare; cash tendered 40 and change 6.50 are not expense amount |
 | `image_13` | `request_84` | `event_7941` | Tote bag order | INR | 2,298 | high | Total paid |
-| `image_14` | `request_101` | `event_9421` | Pharmacy purchase | INR | 4,593 | low | Handwritten total appears 4,593; line items are difficult to read |
+| `image_14` | `request_101` | `event_9421` | Pharmacy purchase | INR | 4,543 | medium-high | Handwritten lines 1,500 + 724 + 796 + 550 + 303 + 670 sum to the handwritten total 4,543 |
 | `image_15` | `request_105` | `event_9806` | Airline ticket purchase | INR | 9,968 | high | Grand total including taxes |
 | `image_16` | `request_113` | `event_10521` | EV charging wallet payment | INR | 393.22 | high | Final total, including taxes |
 
 ### Image Work Still Required
 
-- [ ] Re-review `image_04`, `image_05`, `image_07`, and `image_14` with event
+- [x] Re-review `image_04`, `image_05`, `image_07`, and `image_14` with event
   timing and any linked message; mark one accepted value or preserve an explicit
-  conservative fallback.
+  conservative fallback. Decisions are recorded in
+  [`07-evidence-decision-pack.md`](07-evidence-decision-pack.md).
 - [ ] Have an independent vision pass verify all high-confidence rows, without
   exposing unrelated financial data.
-- [ ] Record the selected document field as well as the number. Numeric OCR
-  agreement alone is insufficient when multiple totals appear.
+- [x] Record the selected document field as well as the number. Numeric OCR
+  agreement alone is insufficient when multiple totals appear. The reviewed
+  fields are in [`07-evidence-decision-pack.md`](07-evidence-decision-pack.md).
 - [ ] Decide whether the final solution uses deterministic per-layout parsing,
   OCR, a multimodal provider, or a validated hybrid.
 - [ ] Add malformed, missing-field, multiple-total, wrong-currency, and provider

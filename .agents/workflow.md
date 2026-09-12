@@ -44,6 +44,17 @@ need only one workflow.
 - A session that authored the change may report implementation evidence but
   must not present its own work as an independent acceptance review.
 
+For delegated pre-plan analysis and discovery results, use fast reconciliation
+by default: inspect the reported findings for conflicts and planning impact,
+but do not run a formal acceptance review or repeat verification locally. If a
+material uncertainty needs corroboration, return a separate bounded
+verification task that states the exact model, reasoning level, scope, and
+whether human action is required. Record minor non-blocking issues for later
+work instead of interrupting the planning-critical path. This fast path does
+not replace implementation review when task metadata, the user, or material
+security, data-integrity, migration, concurrency, or public-API risk requires
+it.
+
 ### Fix
 
 1. Preserve and reproduce the exact failing signal.
