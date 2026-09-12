@@ -1,11 +1,11 @@
 # WP-06 — Capacity And Independent Safety Replay
 
-Status: **READY FOR SEQUENTIAL IMPLEMENTATION — WP-05 ACCEPTANCE GATED**
+Status: **READY FOR SEQUENTIAL IMPLEMENTATION — WP-06A ACCEPTED, WP-06B READY**
 
 Authority: [`master-plan.md`](master-plan.md), WP-06
 
-Depends on: a fresh independent `ACCEPT` for WP-05, built on the final accepted
-WP-04 bytes
+Depends on: accepted WP-05, the accepted WP-05A replay-interface correction,
+and the WP-06A acceptance record below
 
 This work package is split without changing scope. WP-06A establishes the
 single replay oracle and exact failure evidence. WP-06B uses the accepted
@@ -47,7 +47,7 @@ the stated routing profile and has its own focused acceptance boundary.
 | Shared input boundary | One `RequestCase`, its accepted immutable `BaselineForecast`, domain `Payment` values, and zero or more domain `SpendingChange` values |
 | Out of scope | Editing WP-05 files; recurrence or ledger rediscovery; raw evidence parsing; lifecycle/FX policy changes; candidate generation, method eligibility, deadline filtering, installment matching, spending-change enumeration/ranking, status/method selection, explanation, CSV output, provider/model work, or public-sample calibration |
 | External requirements | Standard library only; offline, deterministic, no credentials, no network, no filesystem writes, and no clock reads |
-| Parallel work | Earlier implementation is in progress. Planning may land now, but WP-06 implementation must wait for accepted WP-05 and may not overlap another owner of `planning.py` or `test_planning.py`. |
+| Parallel work | WP-05 is accepted and WP-06A is accepted. WP-06B may land now, but WP-06 implementation must not overlap another owner of `planning.py` or `test_planning.py`. |
 
 ## Dependency And Interface Gate
 
@@ -176,8 +176,7 @@ payment preferences in a replay or diagnostic.
 
 # WP-06A — Implement The Independent Safety Replay Kernel
 
-Status: `ready` — WP-05A dependency/interface gate may now run against the
-accepted replay surface
+Status: **ACCEPTED** — final verdict ACCEPT (2026-09-13), see Review Record
 
 ```yaml
 agent_tier: strong
@@ -328,12 +327,39 @@ targeted/upstream tests, performs distinct probes, and owns the broader gate.
 - Required follow-on: immediately after implementation or correction, hand
   the completed bytes to a fresh independent acceptance reviewer.
 
+## Review Record
+
+- Review date: 2026-09-13
+- Profile: guided, fresh independent acceptance review
+- Scope: `planning.py`, `test_planning.py`, and the WP-06A navigation rows in
+  `code/buy_or_wait/README.md` and `docs/project-map.md`.
+- Dependency evidence: `python3 -m unittest tests.test_forecast` — 72 tests OK.
+- Targeted evidence: `python3 -m unittest tests.test_planning.SafetyReplayTests` — 6 tests OK.
+- Independent regressions: cached checkpoint tamper with fixed primitive deltas
+  raises `baseline_replay_mismatch`; late essential debit moved to day 90 makes
+  an earlier apparently safe payment fail; first-breach failure survives a
+  later large credit; unrelated committed debit, variable envelope, and credit
+  sharing the target family id and amount remain unchanged; second
+  occurrence-date rate removal yields `change_fx_rate_missing` without
+  reusing the first date's rate; opening breach, exact-minimum equality,
+  same-day multiple payments, out-of-horizon/negative payments, duplicate and
+  non-reducing changes, and ambiguous anchors all behave per contract.
+- Owning and repository gates: `python3 -m unittest
+  tests.test_agent_foundation_contract` — 3 tests OK; `python3 -m compileall
+  -q code tests` — OK.
+- Broad gate: `python3 -m unittest discover -s tests -p 'test_*.py'` — 261
+  tests OK, 1 skipped; `git diff --check` — OK.
+- No open WP-06A findings remain.
+
+Verdict: **ACCEPT** (A-AC-01–A-AC-08 satisfied; no open findings). WP-06B may
+proceed through its implementer self-preflight.
+
 ---
 
 # WP-06B — Compute Preference-Independent Baseline Capacity
 
-Status: `ready` — blocked from execution until WP-06A receives fresh
-independent `ACCEPT`
+Status: `ready` — WP-06A received fresh independent `ACCEPT` (2026-09-13);
+implementer self-preflight may run
 
 ```yaml
 agent_tier: standard

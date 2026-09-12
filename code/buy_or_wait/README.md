@@ -19,6 +19,7 @@ change.
 | `evidence.py` | Deterministic carrier-to-fact resolution: validated `EvidenceFact` values or conservative diagnostics. No provider/IO/FX/arithmetic. | Carrier classification, evidence validation, targeting. See map below. | `resolve_case_evidence`, `EvidenceResolution`, `EvidenceDiagnostic`, `EvidenceFactCandidate` |
 | `events.py` | Lifecycle normalization: cash records, reserves, dated credits/debits, transfer pairs, settlement-date FX. | Event/lifecycle, cash-conservation, or FX work. See map below. | `normalize_case_events`, `EventNormalization`, `NormalizedCashRecord`, `NormalizedReserve`, `NormalizedCashEffect`, `NormalizationDecision`, `Disposition`, `EventNormalizationError` |
 | `forecast.py` | Deterministic WP-05 baseline forecast: recurrence projection, conservative variable-spending envelopes, income continuation, exact settlement-date FX, and replay checkpoints. | Forecast horizon, recurrence, variable spending, forecast diagnostics, or ledger replay. | `build_baseline_forecast`, `BaselineForecast`, `ForecastPolicy`, `ForecastBuildError` |
+| `planning.py` | WP-06A independent full-horizon schedule replay over accepted forecast primitives. | Candidate safety replay, payment phase, or proposed recurring-debit changes. | `replay_schedule`, `SafetyReplay`, `ReplayCheckpoint`, `ReplayFailure`, `PlanningError` |
 
 ## `evidence.py` — Internal Symbol Map
 
@@ -128,6 +129,7 @@ Run from the repository root:
 | Evidence resolution | `python3 -m unittest tests.test_evidence` |
 | Event/lifecycle | `python3 -m unittest tests.test_events` |
 | Baseline forecast | `python3 -m unittest tests.test_forecast` |
+| Safety replay | `python3 -m unittest tests.test_planning.SafetyReplayTests` |
 | AI boundary | `python3 -m unittest tests.test_ai_boundary` |
 | Agent docs contract | `python3 -m unittest tests.test_agent_foundation_contract` |
 | All unit tests | `python3 -m unittest` |
