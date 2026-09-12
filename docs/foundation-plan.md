@@ -1,5 +1,10 @@
 # Foundation Plan
 
+> Historical bootstrap record (2026-09-12). This document preserves the
+> foundation decisions that were authorized before materialization; it is not
+> live operating guidance. Use `AGENTS.md`, `.agents/workflow.md`,
+> `docs/project-map.md`, and `docs/diagnostics.md` for current work.
+
 ## Baseline
 
 - Runtime/build: **EXISTING** Python 3 (`Python 3.14.4` observed locally); no dependency or build manifest.

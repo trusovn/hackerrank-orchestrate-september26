@@ -1,52 +1,125 @@
 # Project Map
 
-Verified on 2026-09-12 against commit `0637eb1` plus the bootstrap foundation changes in the working tree.
+Verified on 2026-09-12 against the repository topology and commands recorded
+below. Observed verification results are maintained in
+[`foundation-review.md`](foundation-review.md).
 
-## Canonical commands
+## Authority And Discovery
 
-Run these from the repository root:
+Start at [`../AGENTS.md`](../AGENTS.md). It defines operating constraints and
+routes product behavior to [`../problem_statement.md`](../problem_statement.md),
+current repository facts to this map, task selection to
+[`../.agents/workflow.md`](../.agents/workflow.md), and failures to
+[`diagnostics.md`](diagnostics.md).
 
-| Purpose | Command | Current scope |
+For a bounded task, read only the owning row below, its closest precedent, and
+the selected workflow. Use targeted `rg` searches for call sites and tests.
+
+## Canonical Commands
+
+Run from the repository root:
+
+| Purpose | Command | Current scope / failure signal |
 |---|---|---|
-| Starter entry point | `python3 code/main.py` | Exits successfully but is still an empty product placeholder. |
-| Compile check | `python3 -m compileall -q code tests` | Syntax/import compilation for repository-owned Python. |
-| Focused AI boundary tests | `python3 -m unittest tests.test_ai_boundary` | Offline provider fake and validation gate. |
-| Full foundation verification | `python3 -m unittest discover -s tests -p 'test_*.py'` | AI boundary plus supplied scaffold/data contract. |
+| Starter entry point | `python3 code/main.py` | Exit 0; still an empty product placeholder. Nonzero exit is a runtime failure. |
+| Compile | `python3 -m compileall -q code tests` | Dependency-free syntax/import compilation. Any output with nonzero exit identifies the file. |
+| Agent foundation contract | `python3 -m unittest tests.test_agent_foundation_contract` | Required agent docs, root routing links, and all authoritative local Markdown links. |
+| AI boundary | `python3 -m unittest tests.test_ai_boundary` | Offline provider fake, provider failure, and validation gate. |
+| Dataset/repository contract | `python3 -m unittest tests.test_repository_contract` | Supplied files, headers, IDs, images, and submission source locations. |
+| Full unit suite | `python3 -m unittest discover -s tests -p 'test_*.py'` | All dependency-free repository tests. |
+| Patch hygiene | `git diff --check` | Whitespace errors in tracked changes. |
 
-No install step or third-party dependency exists yet. Add and document one only when an implemented feature requires it.
+No install, lint, formatter, static type checker, or third-party dependency is
+currently declared. Do not imply those gates exist; add and document one only
+when a concrete implementation requires it.
 
-## Layout and ownership
+## Modules And Ownership
 
-| Path | Responsibility |
-|---|---|
-| `AGENTS.md` | Highest repository-local agent rules, challenge contract, and required transcript logging. |
-| `problem_statement.md` | Participant-facing product and output specification. |
-| `README.md` | Human quick start, submission shape, and high-level dataset guide. |
-| `code/main.py` | Canonical batch CLI entry point; product implementation is not present yet. |
-| `code/buy_or_wait/` | Repository-owned Python source; currently only the provider-neutral AI boundary. |
-| `code/evaluation/` | Evaluation runner placeholder and final-run `usage_report.md` source for `code.zip`. |
-| `dataset/` | Supplied participant-facing inputs and blank output template; do not modify inputs. |
-| `tests/` | Standard-library unit and repository-contract tests. |
-| `docs/` | Bootstrap decisions, AI foundation boundaries, and this navigation map. |
-| `output.csv` | Generated final predictions at the repository root; absent until a solution run creates it. |
-| `log.txt` | Append-only, gitignored conversation transcript required for submission. |
+| Path | Owner / responsibility | Public entry point or artifact |
+|---|---|---|
+| [`../AGENTS.md`](../AGENTS.md) | Mandatory agent operating, logging, security, and challenge invariants. | Every agent session starts here. |
+| [`../.agents/workflow.md`](../.agents/workflow.md) | Conditional task-to-workflow router. | Task classification and skill selection. |
+| [`../problem_statement.md`](../problem_statement.md) | Authoritative participant-facing product and evaluation behavior. | Required input/output behavior. |
+| [`diagnostics.md`](diagnostics.md) | Failure identifiers, triage sequence, and current diagnostic coverage. | Start here after a command or boundary fails. |
+| [`../README.md`](../README.md) | Human quick start and submission overview. | `python3 code/main.py`. |
+| [`../code/main.py`](../code/main.py) | Thin batch CLI/composition entry point; product behavior is not implemented. | `python3 code/main.py`. |
+| [`../code/buy_or_wait/`](../code/buy_or_wait/) | Repository-owned product Python. Currently owns only the provider-neutral AI boundary. | `buy_or_wait.ai_boundary`. |
+| [`../code/evaluation/`](../code/evaluation/) | Evaluation runner placeholder and usage-report source packaged under `evaluation/`. | `code/evaluation/main.py`; not runnable as an eval yet. |
+| [`../dataset/`](../dataset/) | Supplied participant-facing input and blank output template. Do not modify inputs. | CSV files and `media/images/`. |
+| [`../tests/`](../tests/) | Standard-library unit and contract tests mirroring source or repository contracts. | `python3 -m unittest ...`. |
+| [`ai-foundation.md`](ai-foundation.md) | Persisted AI boundary, validation, retry, observability, and side-effect constraints. | Guidance for model-owning features. |
+| [`initial-analysis/`](initial-analysis/) | Pre-plan product/data findings, evidence catalog, uncertainty register, and ordered analysis runbook. | Start at `initial-analysis/README.md`; hypotheses do not override the product specification. |
+| [`foundation-plan.md`](foundation-plan.md) | Historical bootstrap decisions, not live operating guidance. | Context only. |
+| [`foundation-review.md`](foundation-review.md) | Latest independent-style readiness record and observed commands. | Readiness verdict and gaps. |
+| `output.csv` | Generated final predictions at repository root; absent until a solution run creates it. | Submission artifact. |
+| `log.txt` | Append-only, gitignored conversation transcript. | Submission chat transcript. |
 
-## Placement rules
+## Closest Precedents
 
-- Put product Python in `code/buy_or_wait/` and keep `code/main.py` a thin CLI/composition entry point.
-- Put provider SDK adapters behind `ModelProvider`; do not import provider SDKs throughout financial logic.
-- Put operation-specific model parsers beside the owning feature under `code/buy_or_wait/`. Add shared abstractions only after two real callers need them.
-- Mirror source behavior under `tests/`; model unit tests use deterministic fakes and never require network access.
-- Put small model fixtures under `tests/fixtures/ai/` only when a concrete feature schema exists.
-- Keep public-example evaluation code and final-run usage accounting under `code/evaluation/` so they package as `evaluation/` inside `code.zip`.
-- Write generated predictions only to root `output.csv`; never overwrite participant-facing dataset inputs.
-- Update this map in the same change when canonical commands, top-level layout, or placement rules change.
+| Change | Start with | Verification |
+|---|---|---|
+| Provider-neutral model call or validation seam | [`../code/buy_or_wait/ai_boundary.py`](../code/buy_or_wait/ai_boundary.py) and [`../tests/test_ai_boundary.py`](../tests/test_ai_boundary.py) | `python3 -m unittest tests.test_ai_boundary` |
+| Dataset/header/artifact contract | [`../tests/test_repository_contract.py`](../tests/test_repository_contract.py) | `python3 -m unittest tests.test_repository_contract` |
+| Agent-facing document or navigation rule | [`../tests/test_agent_foundation_contract.py`](../tests/test_agent_foundation_contract.py) | `python3 -m unittest tests.test_agent_foundation_contract` |
+| Product/data discovery or master-plan preparation | [`initial-analysis/README.md`](initial-analysis/README.md) and its TODO runbook | Recheck dataset contract, local links, and `git diff --check` |
+| New product behavior | Owning module under `code/buy_or_wait/`; no implemented feature precedent exists yet | New focused test, then full unit suite |
+| Evaluation behavior or usage accounting | [`../code/evaluation/main.py`](../code/evaluation/main.py) and [`../code/evaluation/usage_report.md`](../code/evaluation/usage_report.md); both remain placeholders | Feature-owned eval command must be added with implementation |
 
-## Durable constraints and known gaps
+## Placement Rules
 
-- `AGENTS.md` and `problem_statement.md` override summaries here.
-- The financial engine, final output validator, model adapter, prompts, eval runner, usage report contents, and application diagnostics are not implemented.
-- Model output is untrusted until an operation-specific parser and deterministic financial/policy checks accept it.
-- Secrets are environment-only and must not enter Git, logs, traces, datasets, or submission artifacts.
-- No CI, container, datastore, migration system, or generated-code workflow exists; none is justified at bootstrap scale.
+- Put product Python in `code/buy_or_wait/`; keep `code/main.py` a thin CLI and
+  composition boundary.
+- Put provider adapters behind `ModelProvider`. Keep operation-specific parsers
+  beside the owning feature and add shared abstractions only after two real
+  callers need them.
+- Mirror source behavior under `tests/`. Use deterministic model fakes; ordinary
+  tests never require network access.
+- Add fixtures under `tests/fixtures/` only for a concrete tested behavior.
+- Put testable repo-owned utilities, generators, validators, or local CLIs in
+  `tools/`. Put thin human-invoked wrappers in `scripts/`.
+- Neither `tools/` nor `scripts/` exists today. Do not create either directory
+  until a real utility or wrapper is implemented.
+- Keep public-example evaluation and final-run usage accounting under
+  `code/evaluation/` so they package as `evaluation/` inside `code.zip`.
+- Write generated predictions only to root `output.csv`; never overwrite
+  participant-facing inputs under `dataset/`.
+- Put cross-project operating and diagnostic guidance in `docs/`; keep live
+  navigation here and historical bootstrap decisions in `foundation-plan.md`.
+- Keep pre-plan observations, hypotheses, evidence annotations, and analysis
+  handoff material under `docs/initial-analysis/`. Label authority and
+  confidence explicitly; do not restate a hypothesis as product truth.
 
+Any structural, canonical-command, placement, or repository-tool change must
+update this map in the same change.
+
+## Tool Registry Contract
+
+There are currently no repository-owned tools or wrapper scripts. When a real
+one is added, create the appropriate directory and add one registry row with all
+of these fields; do not register placeholders.
+
+| Path | Purpose | Invocation | Inputs | Outputs | Failure signals | Verification command |
+|---|---|---|---|---|---|---|
+| None | No repo-owned tool is implemented. | N/A | N/A | N/A | N/A | N/A |
+
+The registry row and the utility's focused test must land with the tool. A
+human-facing wrapper should contain only invocation glue; testable logic belongs
+in `tools/` or the owning product module.
+
+## Durable Constraints And Known Gaps
+
+- Root agent rules and the product specification override summaries here.
+- The financial engine, final output validator, model adapter, prompts, eval
+  runner, final usage data, and application runtime diagnostics are not
+  implemented.
+- Raw model output remains untrusted until an operation-specific parser and
+  deterministic financial/policy checks accept it.
+- Secrets are environment-only and must not enter Git, logs, traces, datasets,
+  or submission artifacts.
+- No CI, container, datastore, migration, generated-code workflow, `tools/`, or
+  `scripts/` directory exists or is currently justified.
+- Use [`diagnostics.md`](diagnostics.md) for honest current failure coverage and
+  explicit deferred runtime/evaluation diagnostics.
+- Initial corpus findings and P0 behavior questions are preserved in
+  [`initial-analysis/README.md`](initial-analysis/README.md); the master plan is
+  intentionally deferred until its readiness gate is met.

@@ -1,53 +1,86 @@
 # Foundation Readiness Review
 
-Reviewed on 2026-09-12 against commit `0637eb1` and the uncommitted foundation changes shown by `git status`.
+Reviewed on 2026-09-12 against the materialized repository foundation and the
+working tree reported by `git status --short`.
 
 ## Verdict
 
 READY_WITH_NOTES
 
-Another capable coding agent can discover the project purpose, authoritative constraints, current scaffold, canonical commands, code and test placement, and deferred work from repository artifacts alone. The foundation is sufficient to begin bounded product work without relying on this conversation.
+An unfamiliar capable agent can enter through `AGENTS.md`, select only the
+needed workflow and component context, find placement and commands in the
+project map, and classify failures in the diagnostics guide without relying on
+this conversation. Deferred product runtime and evaluation capabilities are
+named as unavailable rather than presented as working foundation features.
 
-## Command verification
+## Command Verification
 
 | Capability | Command | Result | Notes |
 |---|---|---|---|
-| Bootstrap/install | `python3 --version` | PASS | Python 3.14.4 is available. The repository intentionally has no third-party dependencies or install step yet. |
-| Build/typecheck | `python3 -m compileall -q code tests` | PASS | Repository-owned Python compiles successfully. This is a syntax/import compilation gate, not a static type checker. |
-| Focused/smoke test | `python3 -m unittest tests.test_ai_boundary` | PASS | 4 tests passed offline. |
-| Full/normal verify | `python3 -m unittest discover -s tests -p 'test_*.py'` | PASS | 8 tests passed, covering the AI boundary and repository/dataset contract. |
-| Lint/static | N/A | N/A | No lint or static-analysis tool is claimed or justified for the dependency-free scaffold. |
-| Run/boot | `python3 code/main.py` | PASS | Exits 0 with no output, matching the documented empty product placeholder. This does not claim product readiness. |
+| Bootstrap/install | `python3 --version` | PASS | Python 3.14.6 is available. No third-party dependencies or install step are declared. |
+| Build/typecheck | `python3 -m compileall -q code tests` | PASS | Repository-owned Python compiled with exit 0; this is not a static type checker. |
+| Focused foundation contract | `python3 -m unittest tests.test_agent_foundation_contract` | PASS | 3 tests passed: required docs exist, root routing links exist, and authoritative local Markdown links resolve. |
+| Full/normal verify | `python3 -m unittest discover -s tests -p 'test_*.py'` | PASS | 11 tests passed across agent foundation, AI boundary, and repository/dataset contracts. |
+| Lint/static | N/A | N/A | No lint or static-analysis tool is declared or justified for the dependency-free scaffold. |
+| Run/boot | `python3 code/main.py` | PASS | Exited 0 with no output, matching the documented empty product placeholder; this is not product readiness. |
 | Migration smoke | N/A | N/A | The batch CLI has no datastore or migration system. |
-| AI fake/fixture test | `python3 -m unittest tests.test_ai_boundary` | PASS | The deterministic queued fake covers success, invalid output, provider failure, and exhausted outcomes without network access. |
-| AI eval smoke | N/A | N/A | The eval runner is explicitly deferred until sample-mode predictions exist. |
+| AI fake/fixture test | `python3 -m unittest tests.test_ai_boundary` | PASS | 4 tests passed offline for valid output, invalid output, provider failure, and exhausted fake outcomes. |
+| Repository/data contract | `python3 -m unittest tests.test_repository_contract` | PASS | 4 tests passed for supplied schemas, request coverage, images, and submission source locations. |
+| AI eval smoke | N/A | N/A | The evaluation runner is explicitly deferred until sample-mode predictions exist. |
+| Patch hygiene | `git diff --check` | PASS | No whitespace errors in tracked changes. |
 
-Additional repository checks passed:
+Additional checks:
 
-- `git check-ignore -v log.txt` resolves to the root `.gitignore` rule.
-- `git diff --check` reports no whitespace errors in tracked changes.
-- All required review documents and declared scaffold paths exist.
-- `docs/project-map.md` correctly identifies commit `0637eb1` as its tracked baseline and separately acknowledges working-tree foundation changes.
+- The foundation contract was demonstrated fail-first: before materialization it
+  reported the missing diagnostics document and four missing root routing links;
+  the unchanged test then passed after the documents were implemented.
+- `git check-ignore -v log.txt` resolves to `.gitignore:1:log.txt`.
+- Targeted `rg` inspection confirmed that the documented authority, task routes,
+  placement rules, commands, tool-registry fields, diagnostic identifiers, and
+  diagnostic planning contract are present in the persisted entry path.
 
-## Agent-legibility check
+## Agent-Legibility Check
 
-- Project purpose discoverable: **yes**. `README.md`, `docs/project-charter.md`, and the authoritative `problem_statement.md` agree on the terminal batch-agent shape and required output.
-- Canonical commands discoverable: **yes**. `README.md` and `docs/project-map.md` agree on run, compile, focused-test, and full-test commands.
-- Placement rules discoverable: **yes**. `docs/project-map.md` assigns the CLI, package, tests, fixtures, evaluation code, generated output, dataset, and documentation locations.
-- Architecture/current constraints discoverable: **yes**. `AGENTS.md` and `problem_statement.md` are named as authorities; the charter, foundation plan, project map, and AI foundation consistently distinguish established boundaries from deferred product design.
-- Generated vs editable files clear: **yes**. Supplied dataset inputs are protected, root `output.csv` is generated, `log.txt` is append-only and ignored, and `code/evaluation/usage_report.md` is a final-run artifact source.
-- Failure diagnostics available: **adequate for the current scaffold**. `unittest` identifies failing tests and assertions. Application/provider trace fields are specified in `docs/ai-foundation.md`, while their implementation is honestly deferred until a runtime provider-owning feature exists.
+- **What authority applies?** Discoverable. `AGENTS.md` explicitly orders root
+  operating rules, the product specification, the live project map, and
+  module-local instructions.
+- **What should be read for a specific task?** Discoverable. The bounded-context
+  protocol routes an agent through the map to one owning component, closest
+  precedent, selected workflow, and selected skill rather than a repo-wide read.
+- **Where should code, tests, tools, and docs live?** Discoverable. The project
+  map assigns each current module and states placement rules for product code,
+  mirrored tests, evaluation, generated output, testable utilities, wrappers,
+  and cross-project documentation.
+- **Which command verifies the change?** Discoverable. Canonical commands and
+  closest precedents name focused and broad checks, including the agent
+  foundation contract.
+- **Where should a failure be diagnosed?** Discoverable. `docs/diagnostics.md`
+  gives an ordered triage process and identifiers for environment/import,
+  repository contract, deterministic logic, provider, model validation,
+  financial policy, output, and evaluation failures.
+- **Generated versus editable files clear?** Yes. Dataset inputs are protected;
+  root `output.csv` is generated; `log.txt` is append-only and ignored; the
+  usage report is a final-run artifact source.
+- **Tooling state honest?** Yes. The map records no current repository-owned
+  tools or wrappers, defines the registry contract, and prohibits empty
+  `tools/` or `scripts/` directories.
 
-## AI foundation check
+## AI Foundation Check
 
-- Provider seam: `ModelProvider` isolates provider SDK concerns from downstream code.
-- Deterministic fake/fixture: `FakeModelProvider` supplies queued responses or failures and records calls without network access.
-- Output validation: `invoke_validated` exposes only validator-produced values; raw response content does not appear on `ValidatedModelResult`.
-- Retry/idempotency: automatic retries are disabled by default, bounded retry conditions and the idempotency key are documented, and only deterministic validated results may reach the eventual writer.
-- Trace/debug path: required correlation, operation, provider/model, latency/status, validation, and retry metadata are documented; runtime emission is feature-owned and not yet implemented.
-- Eval seam: public samples, placement, required metadata, and separation of contract failures from quality metrics are documented; the executable eval remains correctly deferred.
+- Provider seam: `ModelProvider` isolates provider SDK concerns.
+- Deterministic fake/fixture: `FakeModelProvider` queues responses or failures
+  and records calls without network access.
+- Output validation: `invoke_validated` exposes only parser-produced values;
+  raw content has no side-effect path.
+- Retry/idempotency: automatic retries are disabled by default and the persisted
+  contract requires bounded retry and per-run/request/operation identity.
+- Trace/debug path: required metadata is specified, while real-adapter telemetry
+  is honestly marked deferred in the diagnostics guide.
+- Eval seam: location and required final metadata are established; the executable
+  runner remains explicitly deferred.
 
-Provider failure and parse/validation failure are distinguishable through separate exception paths in the boundary tests. No ordinary test requires a live provider, and no raw model result has a side-effect path in the current scaffold.
+Provider failure and model parse/validation failure remain distinguishable in
+the AI boundary tests. Ordinary tests require no live provider.
 
 ## Blockers
 
@@ -55,22 +88,37 @@ None.
 
 ## Notes
 
-- `code/main.py`, `code/evaluation/main.py`, and `code/evaluation/usage_report.md` are empty placeholders. This is acceptable for foundation readiness because every relevant document states that product execution, evaluation, and final usage accounting remain to be implemented; they must not be mistaken for completed submission artifacts.
-- There is no dedicated formatter, linter, or static type checker. The current compile and unit-test gates are proportionate to the small standard-library scaffold, but command documentation should be updated if product dependencies or tooling are introduced.
-- Runtime diagnostics and an eval smoke command must be added with the features that own provider calls and sample predictions. Their absence does not block the start of product work because their contracts and intended locations are already persisted.
+- `code/main.py`, `code/evaluation/main.py`, and
+  `code/evaluation/usage_report.md` are placeholders. Financial policy, final
+  output validation, runtime provider telemetry, and evaluation diagnostics must
+  arrive with the product features that own them.
+- There is no formatter, linter, static type checker, CI workflow, task runner,
+  container, or repository-owned tool. The current direct commands are
+  proportionate to the small standard-library scaffold; any future addition
+  must update the project map and its tool registry as applicable.
+- `docs/foundation-plan.md` is retained as a clearly marked historical bootstrap
+  record and is not part of the live operating route.
 
-## Recommended delivery route
+## Recommended Delivery Route
 
 `PERSONAL_FLOW`
 
 ### Reasons
 
-- The governing behavior and output contract are detailed and stable in `problem_statement.md` and `AGENTS.md`.
-- The intended system is a single Python batch CLI with no database, API, UI, concurrency, or migration surface requiring shared cross-cutting design.
-- The repository already constrains source placement, test placement, provider isolation, validation, and generated artifacts.
-- The remaining risks are primarily financial edge cases, evidence interpretation, and hidden-test coverage. They can be controlled through small, acceptance-driven tasks with deterministic tests.
-- With roughly 23 hours remaining at review time, repeated bounded tasks provide more risk reduction per unit of time than an SDD phase. Escalation remains appropriate if preflight discovers contradictory rules or an unresolved cross-module contract.
+- The governing behavior and output contract are detailed and stable.
+- The intended system is a single Python batch CLI without a database, API, UI,
+  concurrency, or migration boundary.
+- Source, test, tool, documentation, AI-boundary, validation, and diagnostic
+  placement are now explicit.
+- Remaining risk is concentrated in financial edge cases, evidence
+  interpretation, and hidden-test coverage, which fit bounded tasks with
+  deterministic tests.
+- Contest time pressure favors repeated focused tasks; escalate only if preflight
+  finds contradictory requirements or a genuinely cross-cutting contract.
 
-### Next step
+### Next Step
 
-Use `task-brief-designer` to define the first bounded, testable product implementation task, then follow `task-preflight -> bounded-task-implementer -> task-acceptance-review`.
+Use `task-brief-designer` for the first bounded product behavior, then apply
+`task-preflight` only if repository state or dependencies are uncertain,
+followed by `bounded-task-implementer` and an independent
+`task-acceptance-review` when warranted.
