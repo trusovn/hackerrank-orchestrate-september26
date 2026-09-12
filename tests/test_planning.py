@@ -18,7 +18,9 @@ from buy_or_wait.domain import (  # noqa: E402
 from buy_or_wait.forecast import (  # noqa: E402
     BaselineForecast, Checkpoint, PrimitiveMovement,
 )
-from buy_or_wait.planning import PlanningError, replay_schedule  # noqa: E402
+from buy_or_wait.planning import (  # noqa: E402
+    PlanningError, compute_baseline_capacity, replay_schedule,
+)
 
 
 def d(value: str) -> date:
@@ -114,3 +116,119 @@ class SafetyReplayTests(unittest.TestCase):
         self.assertEqual(result.checkpoints[-1].cash_balance, money("992.5"))
         missing = replay_schedule(case(), source, (), (changed,))
         self.assertEqual(missing.first_failure.reason_code, "change_fx_rate_missing")
+
+
+class CapacityTests(unittest.TestCase):
+    @staticmethod
+    def capacity_case(amount: str) -> RequestCase:
+        base = case()
+        return replace(base, request=replace(base.request, requested_amount=money(amount)))
+
+    def test_safe_amount_is_clamped_and_floored_with_confirming_replay(self) -> None:
+        # Opening headroom 900 (1000 - 100 minimum); requested 850.20 clamps the safe amount to 850.20.
+        source = baseline(move("2026-01-10", "opening", "open"))
+        result = compute_baseline_capacity(self.capacity_case("850.20"), source)
+        self.assertEqual(result.amount_safe_to_pay, money("850.20"))
+        self.assertEqual(result.earliest_date_for_full_payment, d("2026-01-10"))
+
+    def test_fractional_headroom_floors_down_and_never_rounds_up(self) -> None:
+        # Headroom 700.009 (1000 - 199.991 - 100) must floor to 700.00, not 700.01.
+        source = baseline(move("2026-01-10", "opening", "open"), move("2026-01-20", "debit", "bill", "-199.991"))
+        result = compute_baseline_capacity(self.capacity_case("900"), source)
+        self.assertEqual(result.amount_safe_to_pay, money("700.00"))
+
+    def test_breach_yields_zero_and_no_date_despite_later_credit(self) -> None:
+        source = baseline(move("2026-01-10", "opening", "open"),
+                          move("2026-01-15", "debit", "dip", "-1000"),
+                          move("2026-01-20", "credit", "bonus", "5000"))
+        result = compute_baseline_capacity(self.capacity_case("900"), source)
+        self.assertEqual(result.amount_safe_to_pay, money("0"))
+        self.assertIsNone(result.earliest_date_for_full_payment)
+        # A certified baseline that breaches is reported as the breach itself, never as upstream uncertainty.
+        self.assertEqual(result.diagnostics, ("minimum_balance_breach",))
+
+    def test_blocked_baseline_yields_zero_and_no_date(self) -> None:
+        source = baseline(move("2026-01-10", "opening", "open"), blocked=True)
+        result = compute_baseline_capacity(self.capacity_case("900"), source)
+        self.assertEqual(result.amount_safe_to_pay, money("0"))
+        self.assertIsNone(result.earliest_date_for_full_payment)
+        self.assertEqual(result.request_id, "request_P")
+
+    def test_exact_minimum_headroom_is_safe_today(self) -> None:
+        # Headroom exactly 300 -> safe amount 300.00; full payment of 900 never safe in horizon.
+        source = baseline(move("2026-01-10", "opening", "open"), move("2026-01-20", "debit", "bill", "-600"))
+        result = compute_baseline_capacity(self.capacity_case("900"), source)
+        self.assertEqual(result.amount_safe_to_pay, money("300.00"))
+        self.assertIsNone(result.earliest_date_for_full_payment)
+
+    def test_earliest_date_is_exhaustive_first_safe_day(self) -> None:
+        # Baseline headroom: 900, 500 (day-20 debit), 1000 (day-30 credit). A 550 full payment first replays safe on 2026-01-30.
+        source = baseline(move("2026-01-10", "opening", "open"),
+                          move("2026-01-20", "debit", "dip", "-400"),
+                          move("2026-01-30", "credit", "refund", "500"))
+        result = compute_baseline_capacity(self.capacity_case("550"), source)
+        self.assertEqual(result.amount_safe_to_pay, money("500.00"))
+        self.assertEqual(result.earliest_date_for_full_payment, d("2026-01-30"))
+
+    def test_preferences_do_not_change_capacity(self) -> None:
+        source = baseline(move("2026-01-10", "opening", "open"))
+        strict = compute_baseline_capacity(self.capacity_case("900"), source)
+        base = self.capacity_case("900")
+        relaxed_case = replace(
+            base,
+            request=replace(base.request, allows_partial_payment=False, desired_completion_date=d("2026-01-12")),
+            profile=ProfileRecord("user_P", CurrencyCode.ZAR, money("1000"), money("100"), frozenset(), frozenset(), frozenset(), frozenset(), (), None),
+        )
+        self.assertEqual(compute_baseline_capacity(relaxed_case, source), strict)
+
+    def test_partial_trajectory_equivalence_guard(self) -> None:
+        # B-AC-06 property: for 0 < safe < requested and certified earliest F, the two-payment
+        # schedule (D, safe) then (F, requested - safe) is safe and its trajectory matches the
+        # certified single-payment displacements. The oracle compares independently replayed
+        # references; it never calls compute_baseline_capacity for expectations.
+        source = baseline(move("2026-01-10", "opening", "open"),
+                          move("2026-01-20", "debit", "dip", "-400"),
+                          move("2026-01-30", "credit", "refund", "500"))
+        current_case = self.capacity_case("550")
+        result = compute_baseline_capacity(current_case, source)
+        safe_amount = result.amount_safe_to_pay
+        earliest = result.earliest_date_for_full_payment
+        self.assertTrue(0 < safe_amount < money("550"))
+        self.assertIsNotNone(earliest)
+        remainder = money("550") - safe_amount
+        two_payment = replay_schedule(
+            current_case, source,
+            (Payment(current_case.request.request_date, safe_amount), Payment(earliest, remainder)),
+        )
+        self.assertTrue(two_payment.safe)
+        safe_today = replay_schedule(current_case, source, (Payment(current_case.request.request_date, safe_amount),))
+        full_at_earliest = replay_schedule(current_case, source, (Payment(earliest, money("550")),))
+        # Before F: every non-payment baseline checkpoint before F matches the certified
+        # safe-today trajectory (the (D, safe) payment checkpoint is the added displacement).
+        safe_today = replay_schedule(current_case, source, (Payment(current_case.request.request_date, safe_amount),))
+        today_by_id = {point.stable_id: point for point in safe_today.checkpoints if not point.stable_id.startswith("payment:")}
+        for point in two_payment.checkpoints:
+            if point.date >= earliest or point.stable_id.startswith("payment:"):
+                continue
+            self.assertEqual((today_by_id[point.stable_id].date, today_by_id[point.stable_id].cash_balance, today_by_id[point.stable_id].headroom),
+                             (point.date, point.cash_balance, point.headroom))
+        # From F onward: every non-payment baseline checkpoint on/after F matches the standalone
+        # full-payment trajectory, and the final two-payment balance equals the full-payment
+        # balance (payment 1 of exactly remainder completes the displacement).
+        displacement = two_payment.checkpoints[-1].cash_balance - full_at_earliest.checkpoints[-1].cash_balance
+        self.assertEqual(displacement, Decimal("0.00"))
+        # From F onward: payment 1 of exactly remainder converges the trajectory to the standalone
+        # full payment at F — the final two-payment balance and headroom equal the full-payment
+        # balance, and every checkpoint after the F payment matches exactly.
+        displacement = two_payment.checkpoints[-1].cash_balance - full_at_earliest.checkpoints[-1].cash_balance
+        self.assertEqual(displacement, Decimal("0.00"))
+        self.assertEqual((full_at_earliest.checkpoints[-1].date, full_at_earliest.checkpoints[-1].headroom),
+                         (two_payment.checkpoints[-1].date, two_payment.checkpoints[-1].headroom))
+        self.assertEqual(two_payment.checkpoints[-1].stable_id.startswith("payment:"), True)
+        # A 0.01 remainder perturbation must break the invariant.
+        perturbed = replay_schedule(
+            current_case, source,
+            (Payment(current_case.request.request_date, safe_amount), Payment(earliest, remainder - Decimal("0.01"))),
+        )
+        perturbed_single = replay_schedule(current_case, source, (Payment(earliest, remainder),))
+        self.assertNotEqual(perturbed.checkpoints[-1].headroom, perturbed_single.checkpoints[-1].headroom)

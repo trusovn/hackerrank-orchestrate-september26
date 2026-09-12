@@ -1,6 +1,6 @@
 # WP-06 — Capacity And Independent Safety Replay
 
-Status: **READY FOR SEQUENTIAL IMPLEMENTATION — WP-06A ACCEPTED, WP-06B READY**
+Status: **COMPLETE — WP-06A ACCEPTED, WP-06B ACCEPTED (2026-09-13)**
 
 Authority: [`master-plan.md`](master-plan.md), WP-06
 
@@ -358,8 +358,8 @@ proceed through its implementer self-preflight.
 
 # WP-06B — Compute Preference-Independent Baseline Capacity
 
-Status: `ready` — WP-06A received fresh independent `ACCEPT` (2026-09-13);
-implementer self-preflight may run
+Status: **ACCEPTED** — final verdict ACCEPT (2026-09-13), see Review Record
+below
 
 ```yaml
 agent_tier: standard
@@ -500,6 +500,35 @@ not candidate eligibility, ranking, output-row consistency, or sample accuracy.
 - Required follow-on: immediately after implementation or correction, hand
   the completed bytes to a fresh independent acceptance reviewer. Only an
   accepted WP-06B result may unblock WP-07.
+
+## Review Record
+
+- Review date: 2026-09-13
+- Profile: guided, fresh independent acceptance review
+- Scope: `planning.py` (capacity additions), `test_planning.py`
+  (`CapacityTests`), and the WP-06B navigation rows in
+  `code/buy_or_wait/README.md` and `docs/project-map.md`.
+- Dependency evidence: `python3 -m unittest tests.test_planning.SafetyReplayTests` — 6 tests OK.
+- Targeted evidence: `python3 -m unittest tests.test_planning.CapacityTests` — 8 tests OK.
+- Independent regressions: distinct fractional-cent floor probe (895.99),
+  exact-cent preservation; one-day dip forces earliest to advance to day 22
+  with day-21 full payment unsafe and day-22 safe; a later dip invalidates an
+  apparently safe earlier date to `None`; earliest lands exactly on the
+  inclusive horizon end while day-89 payment stays unsafe; metamorphic
+  preference/deadline/method stripping leaves `CapacityResult` identical;
+  two-payment trajectory converges to the certified standalone full payment and
+  a `0.01` remainder perturbation is detected; breach-before-credit and blocked
+  baselines yield zero amount and no date with conservative diagnostics.
+- Owning and repository gates: `python3 -m unittest tests.test_planning` — 14
+  tests OK; `python3 -m unittest tests.test_forecast` — 72 tests OK;
+  `python3 -m unittest tests.test_agent_foundation_contract` — 3 tests OK;
+  `python3 -m compileall -q code tests` — OK.
+- Broad gate: `python3 -m unittest discover -s tests -p 'test_*.py'` — 269
+  tests OK, 1 skipped; `git diff --check` — OK.
+- No open WP-06B findings remain.
+
+Verdict: **ACCEPT** (B-AC-01–B-AC-07 satisfied; no open findings). WP-06
+package exit criteria are met; WP-07 may proceed.
 
 ## Package Exit Criteria
 

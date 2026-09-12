@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
-from decimal import Decimal
+from datetime import date, timedelta
+from decimal import ROUND_FLOOR, Decimal
 
 from buy_or_wait.domain import Payment, RequestCase, SpendingChange, SpendingChangeType
 from buy_or_wait.events import EventNormalizationError, convert_exact
@@ -141,6 +141,43 @@ def _changes(case: RequestCase, baseline: BaselineForecast, changes: tuple[Spend
             return {}, ReplayFailure("change_has_no_effect", None, index, (change.event_id,))
         chosen[family] = change
     return chosen, None
+
+
+@dataclass(frozen=True)
+class CapacityResult:
+    request_id: str
+    amount_safe_to_pay: Decimal
+    earliest_date_for_full_payment: date | None
+    diagnostics: tuple[str, ...]
+
+
+def compute_baseline_capacity(case: RequestCase, baseline: BaselineForecast) -> CapacityResult:
+    """Return safe-today amount and first safe standalone full-payment date."""
+    replayed = replay_schedule(case, baseline)
+    if not replayed.safe or replayed.minimum_headroom is None:
+        diagnostic = baseline.diagnostics[0] if baseline.diagnostics else None
+        if replayed.minimum_headroom is not None and replayed.first_failure is not None:
+            reason: str = replayed.first_failure.reason_code
+        else:
+            reason = diagnostic.reason_code if diagnostic else "baseline_uncertified"
+        return CapacityResult(case.request.request_id, Decimal("0"), None, (reason,))
+    headroom = replayed.minimum_headroom
+    safe = min(max(headroom, Decimal("0")), case.request.requested_amount).quantize(Decimal("0.01"), rounding=ROUND_FLOOR)
+    if safe != 0 and safe.is_zero():
+        safe = Decimal("0")
+    if safe > 0:
+        confirmation = replay_schedule(case, baseline, (Payment(case.request.request_date, safe),))
+        if not confirmation.safe:
+            raise PlanningError("capacity_replay_mismatch", ())
+    earliest: date | None = None
+    day = case.request.request_date
+    while day <= baseline.horizon_end:
+        attempt = replay_schedule(case, baseline, (Payment(day, case.request.requested_amount),))
+        if attempt.safe:
+            earliest = day
+            break
+        day += timedelta(days=1)
+    return CapacityResult(case.request.request_id, safe, earliest, ())
 
 
 def replay_schedule(case: RequestCase, baseline: BaselineForecast, payments: tuple[Payment, ...] = (),
