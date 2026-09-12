@@ -1,6 +1,6 @@
 # WP-01 — Domain Types And Strict Repository Loader
 
-Status: **READY**  
+Status: **ACCEPTED**
 Authority: [`master-plan.md`](master-plan.md), WP-01  
 Depends on: WP-00 (**passed; baseline is fresh**)  
 Readiness route: implementer self-preflight
@@ -210,6 +210,29 @@ Run verification in this order:
 3. `python3 -m compileall -q code tests`
 4. `python3 -m unittest discover -s tests -p 'test_*.py'`
 5. `git diff --check`
+
+## Review Record
+
+Independent acceptance review of the corrected bytes (2026-09-12): reviewer
+regressions F-01/F-02/F-03 pass; AC-01–AC-05 verified; 50-test suite and all
+gates green. Non-blocking P3 findings recorded for the next implementation
+thread:
+
+- **F-04** — Blank required date/boolean fields (`request_date`, `event_date`,
+  `rate_date`, `allows_partial_payment`) surface as `invalid_date` /
+  `invalid_boolean` instead of `missing_required_value` because `_require`
+  runs inside the parse `try` in `_parse_date_field` / `_parse_bool_field`
+  (repository.py). Raise the missing-value reason code before parsing.
+- **F-05** — Dead code `_dedupe` in `code/buy_or_wait/repository.py`; remove.
+- **F-06** — Eight carrier/image/message failure tests in
+  `tests/test_repository.py` skip on the default fixture (user_01 has no
+  messages or images); independently probed but untested in the suite.
+  Consider fixture coverage.
+
+Resolved 2026-09-12 in the maintainability pass: F-05 (dead `_dedupe`
+removed, duplicated `@staticmethod` fixed) and F-06 (fixture now selects a
+sample user with messages, images, and a blank image-linked event, so the
+carrier failure tests run instead of skipping). F-04 remains open.
 
 ## Stops And Handoff
 

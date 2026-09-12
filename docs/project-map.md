@@ -26,7 +26,7 @@ Run from the repository root:
 | Agent foundation contract | `python3 -m unittest tests.test_agent_foundation_contract` | Required agent docs, root routing links, and all authoritative local Markdown links. |
 | AI boundary | `python3 -m unittest tests.test_ai_boundary` | Offline provider fake, provider failure, and validation gate. |
 | Dataset/repository contract | `python3 -m unittest tests.test_repository_contract` | Supplied files, headers, IDs, images, and submission source locations. |
-| Full unit suite | `python3 -m unittest discover -s tests -p 'test_*.py'` | All dependency-free repository tests. |
+| Dataset repository loader | `python3 -m unittest tests.test_repository` | WP-01 domain types, strict loading, case assembly, and fail-fast validation. |
 | Patch hygiene | `git diff --check` | Whitespace errors in tracked changes. |
 
 No install, lint, formatter, static type checker, or third-party dependency is
@@ -43,7 +43,7 @@ when a concrete implementation requires it.
 | [`diagnostics.md`](diagnostics.md) | Failure identifiers, triage sequence, and current diagnostic coverage. | Start here after a command or boundary fails. |
 | [`../README.md`](../README.md) | Human quick start and submission overview. | `python3 code/main.py`. |
 | [`../code/main.py`](../code/main.py) | Thin batch CLI/composition entry point; product behavior is not implemented. | `python3 code/main.py`. |
-| [`../code/buy_or_wait/`](../code/buy_or_wait/) | Repository-owned product Python. Currently owns only the provider-neutral AI boundary. | `buy_or_wait.ai_boundary`. |
+| [`../code/buy_or_wait/`](../code/buy_or_wait/) | Repository-owned product Python: provider-neutral AI boundary, immutable domain contract, and strict dataset repository. | `buy_or_wait.ai_boundary`, `buy_or_wait.domain`, `buy_or_wait.repository`. |
 | [`../code/evaluation/`](../code/evaluation/) | Evaluation runner placeholder and usage-report source packaged under `evaluation/`. | `code/evaluation/main.py`; not runnable as an eval yet. |
 | [`../dataset/`](../dataset/) | Supplied participant-facing input and blank output template. Do not modify inputs. | CSV files and `media/images/`. |
 | [`../tests/`](../tests/) | Standard-library unit and contract tests mirroring source or repository contracts. | `python3 -m unittest ...`. |
@@ -51,6 +51,7 @@ when a concrete implementation requires it.
 | [`initial-analysis/`](initial-analysis/) | Pre-plan product/data findings, evidence catalog, uncertainty register, and ordered analysis runbook. | Start at `initial-analysis/README.md`; hypotheses do not override the product specification. |
 | [`master-plan.md`](master-plan.md) | Deadline-aware product implementation sequence, subsystem boundaries, work packages, acceptance gates, and task-brief handoff. | Start here when creating or ordering bounded implementation tasks. |
 | [`wp-01-plan.md`](wp-01-plan.md) | Implementation-ready contract for WP-01 domain types, strict dataset loading, joined request cases, and repository validation. | Implement after the WP-00 freshness gate passes. |
+| [`wp-02-plan.md`](wp-02-plan.md) | Dependency-gated implementation contract for typed evidence extraction, validation, targeting, and conservative resolution. | Implement only after the corrected WP-01 contract receives fresh independent acceptance. |
 | [`foundation-plan.md`](foundation-plan.md) | Historical bootstrap decisions, not live operating guidance. | Context only. |
 | [`foundation-review.md`](foundation-review.md) | Latest independent-style readiness record and observed commands. | Readiness verdict and gaps. |
 | `output.csv` | Generated final predictions at repository root; absent until a solution run creates it. | Submission artifact. |
@@ -62,6 +63,7 @@ when a concrete implementation requires it.
 |---|---|---|
 | Provider-neutral model call or validation seam | [`../code/buy_or_wait/ai_boundary.py`](../code/buy_or_wait/ai_boundary.py) and [`../tests/test_ai_boundary.py`](../tests/test_ai_boundary.py) | `python3 -m unittest tests.test_ai_boundary` |
 | Dataset/header/artifact contract | [`../tests/test_repository_contract.py`](../tests/test_repository_contract.py) | `python3 -m unittest tests.test_repository_contract` |
+| Domain types or repository loading | [`../code/buy_or_wait/domain.py`](../code/buy_or_wait/domain.py), [`../code/buy_or_wait/repository.py`](../code/buy_or_wait/repository.py), and [`../tests/test_repository.py`](../tests/test_repository.py) | `python3 -m unittest tests.test_repository` |
 | Agent-facing document or navigation rule | [`../tests/test_agent_foundation_contract.py`](../tests/test_agent_foundation_contract.py) | `python3 -m unittest tests.test_agent_foundation_contract` |
 | Product/data discovery or master-plan preparation | [`initial-analysis/README.md`](initial-analysis/README.md) and its TODO runbook | Recheck dataset contract, local links, and `git diff --check` |
 | New product behavior | Owning module under `code/buy_or_wait/`; no implemented feature precedent exists yet | New focused test, then full unit suite |
@@ -111,9 +113,12 @@ in `tools/` or the owning product module.
 ## Durable Constraints And Known Gaps
 
 - Root agent rules and the product specification override summaries here.
-- The financial engine, final output validator, model adapter, prompts, eval
-  runner, final usage data, and application runtime diagnostics are not
-  implemented.
+- The financial engine, evidence resolver, final output validator, model
+  adapter, prompts, eval runner, final usage data, and application runtime
+  diagnostics are not implemented.
+- `RepositoryValidationError` reason codes from `buy_or_wait.repository` are the
+  focused redacted failure signal for dataset loading; triage under
+  `REPO-CONTRACT` in [`diagnostics.md`](diagnostics.md).
 - Raw model output remains untrusted until an operation-specific parser and
   deterministic financial/policy checks accept it.
 - Secrets are environment-only and must not enter Git, logs, traces, datasets,
