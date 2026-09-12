@@ -1,6 +1,6 @@
 # WP-02 — Typed Evidence And Conservative Resolution
 
-Status: **READY**  
+Status: **ACCEPTED** — final verdict ACCEPT (2026-09-12), see Review Record
 Authority: [`master-plan.md`](master-plan.md), WP-02  
 Depends on: WP-01 (**fresh review returned `CHANGES_REQUESTED`; implementation
 must wait for an accepted correction**)  
@@ -304,3 +304,34 @@ the final bytes.
   this brief.
 - Required follow-on: immediately after implementation or correction, hand the
   completed bytes to a fresh independent acceptance reviewer.
+
+## Review Record
+
+Implementation (2026-09-12): `code/buy_or_wait/evidence.py` (2710 lines),
+`tests/test_evidence.py`, and `docs/project-map.md` update. First independent
+review returned `CHANGES_REQUESTED` with finding F-01: 45 of 198
+evaluation-message cached facts carried amounts/currencies absent from their own
+dataset row (template-level value reuse, e.g. `message_44`, `message_62`,
+`message_22`).
+
+Correction (same implementation thread): 24 misgrounded carriers re-derived
+row-locally (amounts, currencies, dates, fact types corrected from each
+message's own `message_text` or linked event row). The remaining 28 flagged
+rows were verified as grounded in each carrier's own linked event (refunds,
+valuations, settled prizes/sales). Regression
+`tests.test_evidence.CarrierLocalGroundingTests` added: every cached amount
+must appear in the carrier's own text or its own `related_event_id` row; sole
+documented exception is the pack-approved 12%-rent derivation on `message_12`.
+
+Fresh independent review (2026-09-12): corpus probe over all 198
+evaluation-message rows — 0 flagged facts; spot-checks confirm row-local
+corrections (`message_44` 530.40 USD, `message_62` 788.40 USD arrears,
+`message_22` ZAR 54120, `message_89` EUR 1188, `message_193` EUR 1528.56,
+`message_20` EUR 653.40 arrears, `message_87` INR 148200, `message_168`
+unavailable credit). Image linkage/amounts fully verified: all 15 images link
+exactly to their `images.csv` user/event and ground blank-source-amount events
+per `FIN-015`; `image_04` remains unresolved. Targeting/duration fail-closed
+logic, trust-boundary redaction, and `image_04` blocking behavior verified.
+Aggregate gate on final bytes: `python3 -m unittest discover -s tests -p
+'test_*.py'` — 93 OK (skipped=1); `git diff --check` clean. Verdict: **ACCEPT**
+(AC-01–AC-07 satisfied; no open findings).

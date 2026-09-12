@@ -43,7 +43,7 @@ when a concrete implementation requires it.
 | [`diagnostics.md`](diagnostics.md) | Failure identifiers, triage sequence, and current diagnostic coverage. | Start here after a command or boundary fails. |
 | [`../README.md`](../README.md) | Human quick start and submission overview. | `python3 code/main.py`. |
 | [`../code/main.py`](../code/main.py) | Thin batch CLI/composition entry point; product behavior is not implemented. | `python3 code/main.py`. |
-| [`../code/buy_or_wait/`](../code/buy_or_wait/) | Repository-owned product Python: provider-neutral AI boundary, immutable domain contract, and strict dataset repository. | `buy_or_wait.ai_boundary`, `buy_or_wait.domain`, `buy_or_wait.repository`. |
+ | [`../code/buy_or_wait/`](../code/buy_or_wait/) | Repository-owned product Python: provider-neutral AI boundary, immutable domain contract, strict dataset repository, and deterministic typed-evidence resolver. | `buy_or_wait.ai_boundary`, `buy_or_wait.domain`, `buy_or_wait.repository`, `buy_or_wait.evidence`. |
 | [`../code/evaluation/`](../code/evaluation/) | Evaluation runner placeholder and usage-report source packaged under `evaluation/`. | `code/evaluation/main.py`; not runnable as an eval yet. |
 | [`../dataset/`](../dataset/) | Supplied participant-facing input and blank output template. Do not modify inputs. | CSV files and `media/images/`. |
 | [`../tests/`](../tests/) | Standard-library unit and contract tests mirroring source or repository contracts. | `python3 -m unittest ...`. |
@@ -64,7 +64,8 @@ when a concrete implementation requires it.
 |---|---|---|
 | Provider-neutral model call or validation seam | [`../code/buy_or_wait/ai_boundary.py`](../code/buy_or_wait/ai_boundary.py) and [`../tests/test_ai_boundary.py`](../tests/test_ai_boundary.py) | `python3 -m unittest tests.test_ai_boundary` |
 | Dataset/header/artifact contract | [`../tests/test_repository_contract.py`](../tests/test_repository_contract.py) | `python3 -m unittest tests.test_repository_contract` |
-| Domain types or repository loading | [`../code/buy_or_wait/domain.py`](../code/buy_or_wait/domain.py), [`../code/buy_or_wait/repository.py`](../code/buy_or_wait/repository.py), and [`../tests/test_repository.py`](../tests/test_repository.py) | `python3 -m unittest tests.test_repository` |
+ | Domain types or repository loading | [`../code/buy_or_wait/domain.py`](../code/buy_or_wait/domain.py), [`../code/buy_or_wait/repository.py`](../code/buy_or_wait/repository.py), and [`../tests/test_repository.py`](../tests/test_repository.py) | `python3 -m unittest tests.test_repository` |
+ | Carrier-to-fact evidence resolution | [`../code/buy_or_wait/evidence.py`](../code/buy_or_wait/evidence.py) and [`../tests/test_evidence.py`](../tests/test_evidence.py) | `python3 -m unittest tests.test_evidence` |
 | Agent-facing document or navigation rule | [`../tests/test_agent_foundation_contract.py`](../tests/test_agent_foundation_contract.py) | `python3 -m unittest tests.test_agent_foundation_contract` |
 | Product/data discovery or master-plan preparation | [`initial-analysis/README.md`](initial-analysis/README.md) and its TODO runbook | Recheck dataset contract, local links, and `git diff --check` |
 | New product behavior | Owning module under `code/buy_or_wait/`; no implemented feature precedent exists yet | New focused test, then full unit suite |
