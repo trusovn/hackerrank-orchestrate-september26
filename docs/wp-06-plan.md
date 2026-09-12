@@ -176,8 +176,8 @@ payment preferences in a replay or diagnostic.
 
 # WP-06A — Implement The Independent Safety Replay Kernel
 
-Status: `ready` — blocked from execution until the dependency/interface gate
-passes
+Status: `ready` — WP-05A dependency/interface gate may now run against the
+accepted replay surface
 
 ```yaml
 agent_tier: strong

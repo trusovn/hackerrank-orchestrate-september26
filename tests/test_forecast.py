@@ -1750,6 +1750,58 @@ class IncomeAndFXTests(unittest.TestCase):
         self.assertEqual(caught.exception.reason_code, "fx_rate_conflict")
 
 
+class PrimitiveMovementTests(unittest.TestCase):
+    """WP-05A: public primitives independently replay every checkpoint."""
+
+    def test_primitives_reconstruct_reserve_debit_and_credit_checkpoints(self) -> None:
+        pending = _event(
+            "event_pending", amount=_dec("200"), event_date="2026-01-05",
+            settlement_date="2026-01-20", status=EventStatus.PENDING,
+        )
+        debit = _event(
+            "event_debit", amount=_dec("50"), event_date="2026-01-15",
+            settlement_date="2026-01-15", status=EventStatus.SCHEDULED,
+        )
+        credit = _event(
+            "event_credit", event_type=EventType.INCOME, category="salary",
+            direction=Direction.CREDIT, amount=_dec("75"), event_date="2026-01-15",
+            settlement_date="2026-01-15", status=EventStatus.SCHEDULED,
+        )
+        case = _case(events=(pending, debit, credit))
+        result = _forecast(case, _resolution())
+
+        cash, reserve = result.opening_cash, _dec("0")
+        self.assertEqual(len(result.primitive_movements), len(result.checkpoints))
+        self.assertEqual(len({m.movement_id for m in result.primitive_movements}), len(result.primitive_movements))
+        for movement, checkpoint in zip(result.primitive_movements, result.checkpoints):
+            cash += movement.cash_delta
+            reserve += movement.reserve_delta
+            self.assertEqual(checkpoint.movement_id, movement.movement_id)
+            self.assertEqual(
+                (checkpoint.cash_balance, checkpoint.reserved_balance,
+                 checkpoint.spendable_balance, checkpoint.headroom),
+                (cash, reserve, cash - reserve, cash - reserve - result.minimum_balance),
+            )
+        self.assertEqual(result.minimum_headroom, min(cp.headroom for cp in result.checkpoints))
+
+    def test_reserve_and_explicit_effects_are_not_mutable_recurrences(self) -> None:
+        pending = _event(
+            "event_pending", amount=_dec("200"), event_date="2026-01-05",
+            settlement_date="2026-01-20", status=EventStatus.PENDING,
+        )
+        explicit = _event(
+            "event_explicit", amount=_dec("50"), event_date="2026-01-15",
+            settlement_date="2026-01-15", status=EventStatus.SCHEDULED,
+        )
+        result = _forecast(_case(events=(pending, explicit)), _resolution())
+        for movement in result.primitive_movements:
+            if movement.origin != "fixed_recurrence":
+                self.assertIsNone(movement.source_amount)
+                self.assertIsNone(movement.source_currency)
+                self.assertIsNone(movement.home_currency)
+                self.assertIsNone(movement.occurrence_date)
+
+
 class LedgerTests(unittest.TestCase):
     """AC-06/AC-07: exact checkpoint boundary and conservative failure."""
 

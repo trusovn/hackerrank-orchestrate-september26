@@ -153,6 +153,26 @@ class Checkpoint:
     family_id: str | None
     source_ids: tuple[str, ...]
     reason_code: str
+    movement_id: str
+
+
+@dataclass(frozen=True)
+class PrimitiveMovement:
+    """One immutable cash/reserve transition for independent safety replay."""
+
+    date: date
+    phase: str
+    movement_id: str
+    cash_delta: Decimal
+    reserve_delta: Decimal
+    origin: str
+    source_event_ids: tuple[str, ...]
+    source_fact_ids: tuple[str, ...]
+    family_id: str | None
+    occurrence_date: date | None
+    source_amount: Decimal | None
+    source_currency: CurrencyCode | None
+    home_currency: CurrencyCode | None
 
 
 @dataclass(frozen=True)
@@ -165,6 +185,7 @@ class BaselineForecast:
     opening_reserved: Decimal
     series_traces: tuple[SeriesTrace, ...]
     projected_occurrences: tuple[ProjectedOccurrence, ...]
+    primitive_movements: tuple[PrimitiveMovement, ...]
     checkpoints: tuple[Checkpoint, ...]
     diagnostics: tuple[ForecastDiagnostic, ...]
     blocks_downstream: bool
@@ -1301,7 +1322,8 @@ class _Builder:
 
     # -- phase 8 -------------------------------------------------------
 
-    def _build_ledger(self) -> list[Checkpoint]:
+    def _build_ledger(self) -> tuple[list[PrimitiveMovement], list[Checkpoint]]:
+        movements: list[PrimitiveMovement] = []
         checkpoints: list[Checkpoint] = []
         cash = self.case.profile.current_available_balance
         reserved = _HOME_ZERO
@@ -1309,24 +1331,51 @@ class _Builder:
 
         def emit(
             day: date,
-            kind: str,
+            phase: str,
             delta: Decimal | None,
             delta_kind: str | None,
             family_id: str | None,
             source_ids: tuple[str, ...],
             reason_code: str,
-            cash_reserve_delta: Decimal = _HOME_ZERO,
+            reserve_delta: Decimal = _HOME_ZERO,
             cash_delta: Decimal = _HOME_ZERO,
+            *,
+            movement_key: str,
+            origin: str,
+            source_fact_ids: tuple[str, ...] = (),
+            source_amount: Decimal | None = None,
+            source_currency: CurrencyCode | None = None,
+            occurrence_date: date | None = None,
         ) -> None:
             nonlocal cash, reserved
+            movement_id = f"{day.isoformat()}:{phase}:{movement_key}"
+            if any(movement.movement_id == movement_id for movement in movements):
+                raise ForecastBuildError("duplicate_primitive_movement", source_ids)
+            mutable = phase == "debit" and origin == "fixed_recurrence"
+            movement = PrimitiveMovement(
+                date=day,
+                phase=phase,
+                movement_id=movement_id,
+                cash_delta=cash_delta,
+                reserve_delta=reserve_delta,
+                origin=origin,
+                source_event_ids=source_ids,
+                source_fact_ids=source_fact_ids,
+                family_id=family_id,
+                occurrence_date=occurrence_date if mutable else None,
+                source_amount=source_amount if mutable else None,
+                source_currency=source_currency if mutable else None,
+                home_currency=self.home_currency if mutable else None,
+            )
+            movements.append(movement)
             cash += cash_delta
-            reserved += cash_reserve_delta
+            reserved += reserve_delta
             spendable = cash - reserved
             headroom = spendable - minimum
             checkpoints.append(
                 Checkpoint(
                     date=day,
-                    kind=kind,
+                    kind=phase,
                     cash_balance=cash,
                     reserved_balance=reserved,
                     spendable_balance=spendable,
@@ -1336,6 +1385,7 @@ class _Builder:
                     family_id=family_id,
                     source_ids=source_ids,
                     reason_code=reason_code,
+                    movement_id=movement.movement_id,
                 )
             )
 
@@ -1347,6 +1397,8 @@ class _Builder:
             None,
             (),
             "opening",
+            movement_key="opening",
+            origin="opening",
         )
 
         for reserve in sorted(
@@ -1360,7 +1412,10 @@ class _Builder:
                 reserve.record_id,
                 reserve.source_event_ids,
                 "opening_reserve",
-                cash_reserve_delta=reserve.amount_home,
+                reserve_delta=reserve.amount_home,
+                movement_key=reserve.record_id,
+                origin="opening_reserve",
+                source_fact_ids=reserve.source_fact_ids,
             )
 
         dated: dict[date, list[dict]] = {}
@@ -1376,6 +1431,7 @@ class _Builder:
                         "amount": reserve.amount_home,
                         "direction": reserve.direction,
                         "source_ids": reserve.source_event_ids,
+                        "source_fact_ids": reserve.source_fact_ids,
                     }
                 )
         for occurrence in self.occurrences:
@@ -1387,9 +1443,12 @@ class _Builder:
                         "amount": occurrence.home_amount,
                         "direction": occurrence.direction,
                         "source_ids": occurrence.source_event_ids
-                        + occurrence.source_fact_ids,
+                        ,
+                        "source_fact_ids": occurrence.source_fact_ids,
                         "family_id": occurrence.family_id,
                         "origin": occurrence.origin,
+                        "source_amount": occurrence.source_amount,
+                        "source_currency": occurrence.source_currency,
                     }
                 )
 
@@ -1425,8 +1484,11 @@ class _Builder:
                         item["record_id"],
                         item["source_ids"],
                         "reserve_settled",
-                        cash_reserve_delta=-item["amount"],
+                        reserve_delta=-item["amount"],
                         cash_delta=-item["amount"],
+                        movement_key=item["record_id"],
+                        origin="reserve_settlement",
+                        source_fact_ids=item["source_fact_ids"],
                     )
                 elif item["direction"] is Direction.DEBIT:
                     emit(
@@ -1440,6 +1502,12 @@ class _Builder:
                         if item.get("origin") != "variable_envelope"
                         else "variable_envelope",
                         cash_delta=-item["amount"],
+                        movement_key=item["record_id"],
+                        origin=item.get("origin", "explicit"),
+                        source_fact_ids=item["source_fact_ids"],
+                        source_amount=item.get("source_amount"),
+                        source_currency=item.get("source_currency"),
+                        occurrence_date=day,
                     )
                 else:
                     emit(
@@ -1451,8 +1519,14 @@ class _Builder:
                         item["source_ids"],
                         "projected_credit",
                         cash_delta=item["amount"],
+                        movement_key=item["record_id"],
+                        origin=item.get("origin", "explicit"),
+                        source_fact_ids=item["source_fact_ids"],
+                        source_amount=item.get("source_amount"),
+                        source_currency=item.get("source_currency"),
+                        occurrence_date=day,
                     )
-        return checkpoints
+        return movements, checkpoints
 
     def run(self) -> BaselineForecast:
         self._classify_histories()
@@ -1489,7 +1563,7 @@ class _Builder:
         self._project_fixed_debits()
         self._merge_explicit_effects()
 
-        checkpoints = self._build_ledger()
+        movements, checkpoints = self._build_ledger()
         headroom_values = [checkpoint.headroom for checkpoint in checkpoints]
         minimum_headroom = (
             min(headroom_values) if headroom_values and not self.blocks else None
@@ -1520,6 +1594,7 @@ class _Builder:
                     ),
                 )
             ),
+            primitive_movements=tuple(movements),
             checkpoints=tuple(checkpoints),
             diagnostics=tuple(self.diagnostics),
             blocks_downstream=self.blocks,

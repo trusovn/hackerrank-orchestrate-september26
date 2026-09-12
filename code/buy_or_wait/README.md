@@ -91,7 +91,10 @@ Fail-closed input issue -> `_validate`, `_build_rate_index`, then
 ## `forecast.py` — Internal Symbol Map
 
 Public result types: `BaselineForecast`, `ForecastDiagnostic`,
-`SeriesObservation`, `SeriesTrace`, `ProjectedOccurrence`, `Checkpoint`.
+`SeriesObservation`, `SeriesTrace`, `ProjectedOccurrence`, `PrimitiveMovement`,
+`Checkpoint`. `BaselineForecast.primitive_movements` is the ordered immutable
+cash/reserve replay ledger; each checkpoint links to its movement by
+`movement_id`.
 Policy types: `ForecastPolicy`, `RecurrenceTiming`, `IncomeContinuation`,
 `VariableSpending`, `HorizonEndpoint`, `UnknownSameDayOrder`.
 Public entry point: `build_baseline_forecast`.
