@@ -35,7 +35,9 @@ Before editing:
 
 Make the smallest change that satisfies the request. Preserve user work, match
 local style, avoid speculative abstractions, and update the project map in the
-same change when structure, commands, or tools change.
+same change when structure, commands, or tools change. Keep
+`code/buy_or_wait/README.md` accurate in the same change when module ownership,
+public symbols, or closest tests under that package change.
 
 ## 2. Session And Conversation Logging
 
