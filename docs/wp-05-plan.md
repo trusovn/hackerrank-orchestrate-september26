@@ -1,11 +1,10 @@
 # WP-05 — Recurrence, Variable Spending, And Baseline Ledger
 
-Status: **READY — WP-04 ACCEPTANCE GATED**
+Status: **ACCEPTED** — final verdict ACCEPT (2026-09-12), see Review Record
 
 Authority: [`master-plan.md`](master-plan.md), WP-05
 
-Depends on: accepted WP-02 and a fresh independent `ACCEPT` for the in-progress
-WP-04 implementation
+Depends on: accepted WP-02 and accepted WP-04
 
 Readiness route: standalone guided preflight — bind this task to the accepted
 WP-04 normalization and future-date FX interface
@@ -62,7 +61,7 @@ auditable baseline.
 | Input boundary | One `RequestCase`, its exact `EvidenceResolution`, and the `EventNormalization` produced from those same inputs |
 | Out of scope | Editing WP-04 files; parsing raw messages/images; lifecycle or FX reimplementation; payment insertion; safe amount or earliest-date search; spending-change application; candidate construction/ranking; explanations; CSV output; provider/model work; policy calibration against solved outputs |
 | External requirements | Standard library only; offline, deterministic, no credentials, no network, and no clock reads |
-| Parallel work | WP-04 is in progress. WP-05 planning may land now, but WP-05 implementation must not start or edit `events.py`/`test_events.py` until WP-04 is accepted. |
+| Parallel work | WP-04 is accepted. WP-05 implementation is complete; no further WP-05 implementation may overlap `events.py`/`test_events.py` or another owner of `forecast.py`/`test_forecast.py`. |
 
 ## Dependency And Timing Gate
 
@@ -510,8 +509,8 @@ planning, output, evaluation, dataset, or solved-sample files.
 
 ## Stops And Handoff
 
-- Stop until in-progress WP-04 receives fresh independent `ACCEPT` and the
-  dependency gate passes on those exact bytes.
+- WP-04 received fresh independent `ACCEPT` and the dependency gate passed on
+  those exact bytes before implementation.
 - Stop and route a narrow WP-04 correction if canonical resolved source money
   or an exact synthesized-date FX operation is absent. Do not work around that
   seam in WP-05.
@@ -525,7 +524,31 @@ planning, output, evaluation, dataset, or solved-sample files.
   expansion and needs its owning task.
 - Preserve all pre-existing user and WP-04 work. Treat the metadata budget as
   a checkpoint, not permission to cut verification.
-- Next action: after WP-04 acceptance, run this task's standalone guided
-  preflight and implement WP-05.
+- Next action: run the WP-06 standalone guided preflight against the accepted
+  WP-05 boundary.
 - Required follow-on: immediately after implementation or correction, hand
   the completed bytes to a fresh independent acceptance reviewer.
+
+## Review Record
+
+- Review date: 2026-09-12
+- Profile: guided, fresh independent acceptance review
+- Scope: `forecast.py`, `test_forecast.py`, the WP-05 navigation rows in
+  `code/buy_or_wait/README.md` and `docs/project-map.md`; the separately owned
+  `.gitignore` change was excluded from this review.
+- Dependency evidence: `python3 -m unittest tests.test_repository
+  tests.test_evidence tests.test_events` — 151 tests OK, 1 skipped.
+- Targeted evidence: `python3 -m unittest tests.test_forecast` — 70 tests OK.
+- Independent regressions: duplicate source ownership fails closed;
+  malformed monetary input raises `ForecastBuildError`; debit traces expose
+  generated dates.
+- Owning and repository gates: `python3 -m unittest
+  tests.test_agent_foundation_contract` — 3 tests OK; `python3 -m compileall
+  -q code tests` — OK.
+- Broad gate: `python3 -m unittest discover -s tests -p 'test_*.py'` — 253
+  tests OK, 1 skipped; `git diff --check HEAD` — OK.
+- Prior findings F-01 through F-04 were resolved or, for F-04, explicitly
+  excluded as unrelated user-owned work. No open WP-05 findings remain.
+
+Verdict: **ACCEPT** (AC-01–AC-09 satisfied; no open findings). WP-06 may
+proceed through its dependency-gated preflight.

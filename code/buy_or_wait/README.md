@@ -18,6 +18,7 @@ change.
 | `ai_boundary.py` | Provider-neutral model boundary: `ModelProvider` protocol, validation gate, offline fake. | Provider/model-boundary or validation-seam work. | `ModelProvider`, `OutputValidator`, `invoke_validated`, `ValidatedModelResult`, `FakeModelProvider` |
 | `evidence.py` | Deterministic carrier-to-fact resolution: validated `EvidenceFact` values or conservative diagnostics. No provider/IO/FX/arithmetic. | Carrier classification, evidence validation, targeting. See map below. | `resolve_case_evidence`, `EvidenceResolution`, `EvidenceDiagnostic`, `EvidenceFactCandidate` |
 | `events.py` | Lifecycle normalization: cash records, reserves, dated credits/debits, transfer pairs, settlement-date FX. | Event/lifecycle, cash-conservation, or FX work. See map below. | `normalize_case_events`, `EventNormalization`, `NormalizedCashRecord`, `NormalizedReserve`, `NormalizedCashEffect`, `NormalizationDecision`, `Disposition`, `EventNormalizationError` |
+| `forecast.py` | Deterministic WP-05 baseline forecast: recurrence projection, conservative variable-spending envelopes, income continuation, exact settlement-date FX, and replay checkpoints. | Forecast horizon, recurrence, variable spending, forecast diagnostics, or ledger replay. | `build_baseline_forecast`, `BaselineForecast`, `ForecastPolicy`, `ForecastBuildError` |
 
 ## `evidence.py` — Internal Symbol Map
 
@@ -87,6 +88,32 @@ Conservation/source-ownership issue -> `_check_conservation`, then
 Fail-closed input issue -> `_validate`, `_build_rate_index`, then
 `tests/test_events.py::BoundaryValidationTests`, `BlockedCorpusCaseTests`
 
+## `forecast.py` — Internal Symbol Map
+
+Public result types: `BaselineForecast`, `ForecastDiagnostic`,
+`SeriesObservation`, `SeriesTrace`, `ProjectedOccurrence`, `Checkpoint`.
+Policy types: `ForecastPolicy`, `RecurrenceTiming`, `IncomeContinuation`,
+`VariableSpending`, `HorizonEndpoint`, `UnknownSameDayOrder`.
+Public entry point: `build_baseline_forecast`.
+
+| Area | Symbols |
+|---|---|
+| Boundary and error contract | `ForecastBuildError`, `_Builder._validate_boundary` |
+| Recurrence detection | `_detect_monthly`, `_detect_weekly`, `_detect_tolerant_monthly`, `_detect_tolerant_weekly`, `_Builder._detect_cadence`, `_Builder._project_dates` |
+| History classification and amounts | `_Builder._classify_histories`, `_Builder._series_key`, `_Builder._select_amount` |
+| Evidence-driven lifecycle changes | `_Builder._apply_facts`, `_Builder._resolve_targets`, `_Builder._apply_fact` |
+| Variable spending | `_Builder._project_variable`, `_Builder._project_variable_v1`, `_Builder._emit_envelope` |
+| Income and FX | `_Builder._project_income_and_fx`, `_Builder._project_income_series`, `_Builder._convert` |
+| Fixed debits and traceability | `_Builder._project_fixed_debits`, `_Builder._apply_date_replacement`, `_Builder._trace` |
+| Ledger replay | `_Builder._build_ledger`, `_Builder.run` |
+
+Forecast issue -> `build_baseline_forecast`, then the relevant `PolicySurfaceTests`,
+`CadenceTests`, `FactLifecycleTests`, `VariableSpendingTests`, `IncomeAndFXTests`,
+or `LedgerTests` in `tests/test_forecast.py`.
+
+Boundary validation or conservative blocking issue -> `_Builder._validate_boundary`,
+`ForecastBuildError`, and `tests/test_forecast.py::BoundaryValidationTests`
+
 ## Verification Commands
 
 Run from the repository root:
@@ -97,6 +124,7 @@ Run from the repository root:
 | Domain/repository | `python3 -m unittest tests.test_repository` |
 | Evidence resolution | `python3 -m unittest tests.test_evidence` |
 | Event/lifecycle | `python3 -m unittest tests.test_events` |
+| Baseline forecast | `python3 -m unittest tests.test_forecast` |
 | AI boundary | `python3 -m unittest tests.test_ai_boundary` |
 | Agent docs contract | `python3 -m unittest tests.test_agent_foundation_contract` |
 | All unit tests | `python3 -m unittest` |
@@ -115,6 +143,7 @@ Narrow to one test class, e.g.
 | Event/lifecycle/FX | `events.py` -> `normalize_case_events`, `_classify`, `_convert`, `_build_rate_index` | `tests/test_events.py::LifecycleMatrixTests`, `ExactFXTests` |
 | Transfer-pair neutrality | `events.py` -> `_classify_transfer_pairs`, `_find_counterpart`, `_strip_pair_effects` | `tests/test_events.py::TransferPairTests` |
 | Source-accounting conservation | `events.py` -> `_check_conservation` | `tests/test_events.py::ConservationTests` |
+| Baseline forecast | `forecast.py` -> `build_baseline_forecast`, `_Builder.run`, `_Builder._build_ledger` | `tests/test_forecast.py` (`PolicySurfaceTests` through `LedgerTests`) |
 | Provider/model boundary | `ai_boundary.py` -> `ModelProvider`, `invoke_validated`, `OutputValidator` | `tests/test_ai_boundary.py::AiBoundaryTests` |
 | Offline evidence-strategy assessment | `code/evaluation/evidence_strategy.py` (outside this package) | `tests/test_evidence_strategy.py`, oracles under `tests/fixtures/evidence/` |
 
@@ -128,6 +157,10 @@ Narrow to one test class, e.g.
 - `repository.py` intentionally discards raw `message_text`; message evidence
   resolves from cached validated facts keyed by exact `message_id`, re-validated
   against the case at resolve time. Unknown carriers fail closed to a diagnostic.
+- `forecast.py` consumes one validated `RequestCase`, `EvidenceResolution`, and
+  `EventNormalization`; it reads no files, clock, environment, provider, or
+  global cache, and writes no output. It produces only a baseline forecast for
+  downstream payment-capacity and plan-selection work.
 - Evaluation-only code lives in `code/evaluation/`, not under this package.
 
 ## Maintenance
