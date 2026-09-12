@@ -2,7 +2,8 @@
 
 Start with the operating rules in [`../AGENTS.md`](../AGENTS.md), then use
 [`../docs/project-map.md`](../docs/project-map.md) to find the owning component,
-closest precedent, and narrowest command. Load only the workflow selected below
+closest precedent, and narrowest command. Don't read more documents than is needed 
+for the immediate task at hand. Load only the workflow selected below
 and only that local skill's complete `SKILL.md`; never preload the skills tree.
 
 This routing is conditional, not a mandatory ceremony. A small, clear task may

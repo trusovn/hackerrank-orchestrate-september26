@@ -49,6 +49,7 @@ when a concrete implementation requires it.
 | [`../tests/`](../tests/) | Standard-library unit and contract tests mirroring source or repository contracts. | `python3 -m unittest ...`. |
 | [`ai-foundation.md`](ai-foundation.md) | Persisted AI boundary, validation, retry, observability, and side-effect constraints. | Guidance for model-owning features. |
 | [`initial-analysis/`](initial-analysis/) | Pre-plan product/data findings, evidence catalog, uncertainty register, and ordered analysis runbook. | Start at `initial-analysis/README.md`; hypotheses do not override the product specification. |
+| [`master-plan.md`](master-plan.md) | Deadline-aware product implementation sequence, subsystem boundaries, work packages, acceptance gates, and task-brief handoff. | Start here when creating or ordering bounded implementation tasks. |
 | [`foundation-plan.md`](foundation-plan.md) | Historical bootstrap decisions, not live operating guidance. | Context only. |
 | [`foundation-review.md`](foundation-review.md) | Latest independent-style readiness record and observed commands. | Readiness verdict and gaps. |
 | `output.csv` | Generated final predictions at repository root; absent until a solution run creates it. | Submission artifact. |
@@ -122,5 +123,6 @@ in `tools/` or the owning product module.
 - Use [`diagnostics.md`](diagnostics.md) for honest current failure coverage and
   explicit deferred runtime/evaluation diagnostics.
 - Initial corpus findings and P0 behavior questions are preserved in
-  [`initial-analysis/README.md`](initial-analysis/README.md); the master plan is
-  intentionally deferred until its readiness gate is met.
+  [`initial-analysis/README.md`](initial-analysis/README.md); the implementation
+  sequence and retained policy experiments are now owned by
+  [`master-plan.md`](master-plan.md).
