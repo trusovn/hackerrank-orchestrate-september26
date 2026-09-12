@@ -2628,6 +2628,7 @@ def _resolve_primary_candidate(
             amount=amount,
             currency=currency,
             effective_date=effective_date,
+            settlement_date=settlement_date,
             recurrence_duration_months=candidate.recurrence_duration_months,
             notes=candidate.notes,
         )
@@ -2670,6 +2671,7 @@ def _resolve_secondary_candidate(
                 amount=amount,
                 currency=currency,
                 effective_date=None,
+                settlement_date=settlement_date,
                 recurrence_duration_months=None,
                 notes=candidate.notes,
             )

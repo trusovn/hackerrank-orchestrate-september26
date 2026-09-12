@@ -348,6 +348,7 @@ class SampleMessageOracleTests(unittest.TestCase):
         self.assertEqual(fact.amount, Decimal("1661"))
         self.assertEqual(str(fact.effective_date if fact.effective_date else ""), "")
         self.assertIsNone(fact.target_event_id)
+        self.assertEqual(str(fact.settlement_date), "2026-01-15")
 
     def test_message_12_rent_amendment(self) -> None:
         fact = self.facts["message_12"][0]
@@ -380,6 +381,85 @@ class SampleMessageOracleTests(unittest.TestCase):
         self.assertEqual(fact.fact_type, EvidenceFactType.SETTLED_ONE_TIME_CREDIT)
         self.assertEqual(fact.amount, Decimal("33550"))
         self.assertEqual(fact.target_event_id, "event_2165")
+
+
+class SettlementDatePreservationTests(unittest.TestCase):
+    """WP-02 correction: the parsed settlement date survives fact construction.
+
+    ``EvidenceFact`` exposes a structured ``settlement_date`` field and both
+    the primary and secondary candidate paths carry it through unchanged. A
+    confirmed future credit stays a non-cash fact until its stated settlement
+    date, so the date itself is part of the grounded evidence surface.
+    """
+
+    def _resolve_candidate(self, candidate: EvidenceFactCandidate):
+        import buy_or_wait.evidence as evidence_module
+
+        original = evidence_module._MESSAGE_FACTS
+        evidence_module._MESSAGE_FACTS = {"test_msg": (candidate,)}
+        try:
+            case = _case(messages=(_message("test_msg"),))
+            return resolve_case_evidence(case)
+        finally:
+            evidence_module._MESSAGE_FACTS = original
+
+    def test_confirmed_future_credit_exposes_settlement_date(self) -> None:
+        candidate = EvidenceFactCandidate(
+            "message",
+            "test_msg",
+            "user_01",
+            EvidenceFactType.CONFIRMED_FUTURE_CREDIT,
+            amount="1661",
+            currency="EUR",
+            settlement_date="2026-01-15",
+        )
+        resolution = self._resolve_candidate(candidate)
+        self.assertEqual(len(resolution.facts), 1)
+        fact = resolution.facts[0]
+        self.assertEqual(str(fact.settlement_date), "2026-01-15")
+        self.assertIsNone(fact.effective_date)
+
+    def test_primary_path_preserves_settlement_date(self) -> None:
+        candidate = EvidenceFactCandidate(
+            "message",
+            "test_msg",
+            "user_01",
+            EvidenceFactType.SETTLED_ONE_TIME_CREDIT,
+            amount="33550",
+            currency="INR",
+            settlement_date="2025-12-28",
+        )
+        resolution = self._resolve_candidate(candidate)
+        self.assertEqual(len(resolution.facts), 1)
+        self.assertEqual(str(resolution.facts[0].settlement_date), "2025-12-28")
+
+    def test_secondary_path_preserves_settlement_date(self) -> None:
+        candidate = EvidenceFactCandidate(
+            "message",
+            "test_msg",
+            "user_01",
+            EvidenceFactType.SETTLED_ONE_TIME_CREDIT,
+            amount="653.40",
+            currency="EUR",
+            settlement_date="2025-12-28",
+            secondary=True,
+        )
+        resolution = self._resolve_candidate(candidate)
+        self.assertEqual(len(resolution.facts), 1)
+        self.assertEqual(str(resolution.facts[0].settlement_date), "2025-12-28")
+
+    def test_absent_settlement_date_stays_none(self) -> None:
+        candidate = EvidenceFactCandidate(
+            "message",
+            "test_msg",
+            "user_01",
+            EvidenceFactType.SETTLED_ONE_TIME_CREDIT,
+            amount="33550",
+            currency="INR",
+        )
+        resolution = self._resolve_candidate(candidate)
+        self.assertEqual(len(resolution.facts), 1)
+        self.assertIsNone(resolution.facts[0].settlement_date)
 
 
 class ImageOracleTests(unittest.TestCase):

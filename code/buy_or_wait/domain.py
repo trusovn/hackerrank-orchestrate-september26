@@ -217,9 +217,9 @@ class EvidenceFact:
     amount: Decimal | None = None
     currency: CurrencyCode | None = None
     effective_date: date | None = None
+    settlement_date: date | None = None
     recurrence_duration_months: int | None = None
     notes: str = ""
-
 
 @dataclass(frozen=True)
 class Payment:

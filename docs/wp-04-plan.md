@@ -1,9 +1,10 @@
 # WP-04 — Lifecycle Normalization And Exact FX
 
-Status: **READY — PREREQUISITE CORRECTION GATED**
+Status: **READY — GATE ACCEPTED (2026-09-12)**
 Authority: [`master-plan.md`](master-plan.md), WP-04  
-Depends on: WP-01 and accepted WP-02; the settlement-date preservation check
-below must pass before implementation starts  
+Depends on: accepted WP-01 and WP-02; the WP-02 settlement-date correction
+received fresh independent acceptance on 2026-09-12, and the short gate below
+must still pass on those accepted bytes before implementation starts
 Readiness route: standalone guided preflight — confirm the accepted WP-02 fact
 contract can represent every dated standalone cash fact
 
@@ -77,13 +78,16 @@ WP-02 is accepted, and WP-03 may continue independently. Before creating
    amount, currency, fact ID, and carrier source IDs.
 5. Confirm no active WP-03 work overlaps `events.py` or `test_events.py`.
 
-The currently inspected accepted bytes fail items 2–3: the candidate contains
-the settlement date, but the public `EvidenceFact` drops it. Stop and route a
-narrow WP-02 correction with a regression for message 11 before implementing
-WP-04. That correction may add the field to `domain.py`, preserve it in
-`evidence.py`, and update `test_evidence.py`; it is not part of WP-04 and must
-receive fresh acceptance. Do not overload `effective_date`, parse `notes`,
-reach into `_MESSAGE_FACTS`, reopen `messages.csv`, or omit the credit.
+The previously inspected accepted bytes failed items 2–3: the candidate
+contained the settlement date, but the public `EvidenceFact` dropped it. That
+narrow WP-02 correction is now implemented and independently accepted
+(2026-09-12): `EvidenceFact` carries a structured `settlement_date: date | None`
+in `domain.py`, both fact-construction paths in `evidence.py` preserve the
+parsed date, and `tests/test_evidence.py` adds the message-11 `2026-01-15`
+regression plus `SettlementDatePreservationTests` covering the primary,
+secondary, and absent-date cases. No further correction is required; do not
+overload `effective_date`, parse `notes`, reach into `_MESSAGE_FACTS`, reopen
+`messages.csv`, or omit the credit.
 
 If the accepted upstream shape changes in any other way, update this brief only
 for the exact interface delta. Do not redesign lifecycle policy during
@@ -239,8 +243,8 @@ Numeric equality must be IDR 28,499,994 exactly; do not replace it with
 
 ## Required Work
 
-1. Complete the prerequisite gate and obtain fresh acceptance for the narrow
-   WP-02 settlement-date correction if required.
+1. Complete the prerequisite gate on the accepted WP-01/WP-02 bytes; the
+   settlement-date correction is already accepted and requires no rework.
 2. Add fail-first `tests/test_events.py` cases using small immutable synthetic
    `RequestCase` and `EvidenceResolution` builders; keep decisive amounts,
    dates, IDs, links, and expected reason codes visible in each test.
@@ -330,8 +334,10 @@ tests do not certify WP-05 forecast safety or final output correctness.
 
 ## Stops And Handoff
 
-- Stop before WP-04 implementation until the structured standalone-fact
-  settlement date is preserved by accepted WP-02 bytes.
+- Stop before WP-04 implementation until the prerequisite gate passes on the
+  accepted bytes: the structured standalone-fact settlement date is preserved
+  (`domain.py` field, both `evidence.py` construction paths, message-11
+  `2026-01-15` regression) and the repository/evidence suites are green.
 - Stop on a red repository/evidence test, an unknown upstream public shape, or
   dirty overlap with `domain.py`, `evidence.py`, `test_evidence.py`,
   `events.py`, or `test_events.py`; identify the owner rather than combining
@@ -344,8 +350,7 @@ tests do not certify WP-05 forecast safety or final output correctness.
   helper, or new dependency is scope expansion and needs a separate brief.
 - Preserve all pre-existing user and WP-03 work. Treat the metadata budget as a
   checkpoint.
-- Next action: route the narrow WP-02 settlement-date correction and fresh
-  acceptance, then run this task's standalone guided preflight and implement
-  WP-04.
+- Next action: run this task's standalone guided preflight against the
+  accepted bytes, then implement WP-04.
 - Required follow-on: immediately after implementation or correction, hand the
   completed bytes to a fresh independent acceptance reviewer.
