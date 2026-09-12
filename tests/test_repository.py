@@ -2,6 +2,7 @@
 validation of the strict dataset repository."""
 
 import csv
+import datetime
 import shutil
 import sys
 import tempfile
@@ -125,7 +126,15 @@ def build_minimal_dataset(tmp: Path) -> dict[str, list[dict[str, str]]]:
     rows: dict[str, list[dict[str, str]]] = {}
 
     sample_rows = _read("sample_requests.csv")
-    target = sample_rows[0]
+    messages = _read("messages.csv")
+    images = _read("images.csv")
+    message_users = {row["user_id"] for row in messages}
+    image_users = {row["user_id"] for row in images}
+    target = next(
+        row
+        for row in sample_rows
+        if row["user_id"] in message_users and row["user_id"] in image_users
+    )
     user_id = target["user_id"]
     request_id = target["request_id"]
 
@@ -141,24 +150,58 @@ def build_minimal_dataset(tmp: Path) -> dict[str, list[dict[str, str]]]:
     blank_ids = {row["event_id"] for row in user_events if row["amount"] == ""}
     image_rows = [
         row
-        for row in _read("images.csv")
+        for row in images
         if row["user_id"] == user_id and row["request_id"] == request_id
     ]
     image_event_ids = {row["related_event_id"] for row in image_rows}
-    keep_ids = set(blank_ids) | image_event_ids
+    message_rows = [row for row in messages if row["user_id"] == user_id]
+    message_event_ids = {
+        row["related_event_id"] for row in message_rows if row["related_event_id"]
+    }
+    keep_ids = set(blank_ids) | image_event_ids | message_event_ids
+    non_blank_ids = {row["event_id"] for row in user_events if row["amount"] != ""}
+    keep_ids |= non_blank_ids
+    # Close lifecycle links so kept events only reference kept same-user events.
+    changed = True
+    while changed:
+        changed = False
+        for row in user_events:
+            link = row["linked_event_id"]
+            if link and link not in keep_ids:
+                keep_ids.add(link)
+                changed = True
     rows["financial_events.csv"] = [
         row for row in user_events if row["event_id"] in keep_ids
-    ] + [row for row in user_events if row["amount"] != ""]
+    ]
     rows["images.csv"] = image_rows
 
     rows["request_payment_options.csv"] = [
         row for row in _read("request_payment_options.csv") if row["request_id"] == request_id
     ]
-    rows["messages.csv"] = [
-        row for row in _read("messages.csv") if row["user_id"] == user_id
-    ]
+    rows["messages.csv"] = message_rows
     rows["exchange_rates.csv"] = []
     rows["requests.csv"] = []
+
+    # A second sample request from a different user exercises cross-user
+    # link validation (wrong-user carrier links, one-request-per-user).
+    other = next(
+        row
+        for row in sample_rows
+        if row["user_id"] != user_id
+    )
+    rows["sample_requests.csv"] = rows["sample_requests.csv"] + [
+        {column: other[column] for column in SAMPLE_INPUT_COLUMNS}
+    ]
+    rows["financial_profiles.csv"] = rows["financial_profiles.csv"] + [
+        row
+        for row in _read("financial_profiles.csv")
+        if row["user_id"] == other["user_id"]
+    ]
+    rows["request_payment_options.csv"] = rows["request_payment_options.csv"] + [
+        row
+        for row in _read("request_payment_options.csv")
+        if row["request_id"] == other["request_id"]
+    ]
 
     write_dataset(tmp, rows)
     return rows
@@ -308,7 +351,11 @@ class ValidationFailureTests(unittest.TestCase):
         self.assert_reason("invalid_date")
 
     def test_completion_before_request(self) -> None:
-        mutate(self._tmp, "sample_requests.csv", 0, "desired_completion_date", "2020-01-01")
+        request_date = datetime.date.fromisoformat(
+            read_tmp(self._tmp, "sample_requests.csv")[0]["request_date"]
+        )
+        before = (request_date - datetime.timedelta(days=1)).isoformat()
+        mutate(self._tmp, "sample_requests.csv", 0, "desired_completion_date", before)
         self.assert_reason("completion_before_request_date")
 
     def test_invalid_request_type_enum(self) -> None:
@@ -394,7 +441,10 @@ class ValidationFailureTests(unittest.TestCase):
         rows = read_tmp(self._tmp, "messages.csv")
         if not rows:
             self.skipTest("fixture user has no messages")
-        rows[0]["request_id"] = "request_02"
+        # The fixture's second sample row belongs to a different user, so a
+        # known but foreign request link triggers the wrong-user failure.
+        foreign_request = read_tmp(self._tmp, "sample_requests.csv")[1]["request_id"]
+        rows[0]["request_id"] = foreign_request
         write_dataset(self._tmp, {"messages.csv": rows})
         self.assert_reason("wrong_user_request_link")
 

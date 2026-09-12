@@ -1,6 +1,6 @@
 # WP-01 — Domain Types And Strict Repository Loader
 
-Status: **ACCEPTED**
+Status: **ACCEPTED** — final verdict ACCEPT (2026-09-12), see Review Record
 Authority: [`master-plan.md`](master-plan.md), WP-01  
 Depends on: WP-00 (**passed; baseline is fresh**)  
 Readiness route: implementer self-preflight
@@ -234,6 +234,22 @@ removed, duplicated `@staticmethod` fixed) and F-06 (fixture now selects a
 sample user with messages, images, and a blank image-linked event, so the
 carrier failure tests run instead of skipping). F-04 remains open.
 
+### Final Verdict — ACCEPT (2026-09-12)
+
+Fresh independent acceptance review of the corrected bytes: F-07 (fixture still
+selected user_01, 8 carrier tests skipping despite the F-06 resolution claim)
+was raised and resolved — the fixture now join-derives a carrier-bearing target
+(request_03/user_03) plus a foreign-user secondary sample for cross-user link
+tests. Follow-up test regressions (stale completion-date mutation; unknown
+foreign request link) were corrected with derived dates and a known foreign
+request. Re-review evidence: full discover 50 tests OK (skipped=1, legitimate —
+user_03 has one blank event), `test_repository_contract` 4 OK, `compileall`
+clean, `git diff --check` clean, adversarial probes (two-user fixture load,
+carrier case assembly, duplicate keys, link ownership, option shape, sample
+isolation) all pass. AC-01–AC-05 satisfied; F-04 remains the sole open P3,
+tracked for the next implementation thread and non-blocking. WP-01 is accepted
+and may advance.
+
 ## Stops And Handoff
 
 - Stop on dataset fingerprint drift and reconcile WP-00 before continuing.
@@ -244,6 +260,7 @@ carrier failure tests run instead of skipping). F-04 remains open.
   work packages.
 - Preserve existing user work and treat the metadata budget as a soft
   checkpoint.
-- Next action: guided implementation.
+- Next action: none — WP-01 accepted. Proceed to the next work package.
+- Required follow-on: carry open F-04 into the next work package's brief.
 - Required follow-on: immediately after implementation or correction, hand the
   completed bytes to a fresh independent acceptance reviewer.
