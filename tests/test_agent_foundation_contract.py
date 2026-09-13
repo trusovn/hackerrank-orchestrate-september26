@@ -10,7 +10,10 @@ AUTHORITATIVE_AGENT_DOCS = (
     Path("docs/project-map.md"),
     Path("docs/diagnostics.md"),
 )
-REQUIRED_AGENT_PATHS = AUTHORITATIVE_AGENT_DOCS + (Path("problem_statement.md"),)
+AGENT_NAVIGATION_DOCS = AUTHORITATIVE_AGENT_DOCS + (
+    Path("code/buy_or_wait/README.md"),
+)
+REQUIRED_AGENT_PATHS = AGENT_NAVIGATION_DOCS + (Path("problem_statement.md"),)
 REQUIRED_ROOT_LINKS = {
     ".agents/workflow.md",
     "docs/project-map.md",
@@ -43,8 +46,8 @@ class AgentFoundationContractTests(unittest.TestCase):
             f"missing AGENTS.md links: {sorted(REQUIRED_ROOT_LINKS - targets)}",
         )
 
-    def test_local_links_in_authoritative_agent_documents_resolve(self) -> None:
-        for relative_document in AUTHORITATIVE_AGENT_DOCS:
+    def test_local_links_in_agent_navigation_documents_resolve(self) -> None:
+        for relative_document in AGENT_NAVIGATION_DOCS:
             document = REPO_ROOT / relative_document
             if not document.is_file():
                 continue

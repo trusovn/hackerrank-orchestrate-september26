@@ -25,6 +25,8 @@ source and test together with:
 
 ```text
 rg -n '<symbol-or-test-class>' code/buy_or_wait/<module>.py tests/test_<area>.py
+rg -n '^class .*Tests' tests/test_<area>.py
+python3 -m unittest tests.test_<area> -k '<TestClass-or-name-fragment>'
 ```
 
 Read only the matching function and the nearest relevant test class.
@@ -39,6 +41,21 @@ Read only the matching function and the nearest relevant test class.
 | Recurrence, variable-spending envelope, income, or baseline ledger | `forecast.py`: `build_baseline_forecast`, `BaselineForecast`, `ForecastPolicy`, `ForecastBuildError` | `tests/test_forecast.py` — `python3 -m unittest tests.test_forecast` |
 | Payment replay or baseline capacity | `planning.py`: `replay_schedule`, `compute_baseline_capacity`, `SafetyReplay`, `CapacityResult`, `PlanningError` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.SafetyReplayTests` or `python3 -m unittest tests.test_planning.CapacityTests` |
 | No-change candidate enumeration (WP-07A) | `planning.py`: `RecommendationMethod`, `PaymentTemplate`, `PlanCandidate`, `CandidatePool`, `build_no_change_candidate_pool` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.NoChangeCandidateTests` |
+
+## Dependency Fan-Out
+
+This is contract/data flow, not merely Python import direction:
+
+```text
+dataset -> repository -> RequestCase -> evidence -> events -> forecast -> planning
+                    domain contracts support every deterministic stage above
+ai_boundary remains isolated until an explicit composition layer consumes it
+```
+
+For a public contract change, inspect and test the owning stage and every
+affected stage to its right. For a private implementation-only change, start
+with the owning test and broaden only when behavior or a shared contract can
+propagate.
 
 ## Package Boundaries
 
@@ -60,6 +77,7 @@ Keep this file to the routing information that prevents unnecessary discovery:
 the owning module, its public entry point, and its nearest test. Update it only
 when package ownership, a public starting symbol, a package boundary, or the
 nearest focused test changes. Keep the large-file list current when a package
-source or owning test becomes costly to read sequentially. Put repository-wide
-commands and placement rules in [`docs/project-map.md`](../../docs/project-map.md),
-not here.
+source or owning test becomes costly to read sequentially, and update the
+fan-out only when a public dependency or data-flow boundary changes. Put
+repository-wide commands and placement rules in
+[`docs/project-map.md`](../../docs/project-map.md), not here.
