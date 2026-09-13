@@ -44,6 +44,7 @@ Read only the matching function and the nearest relevant test class.
 | No-change candidate enumeration (WP-07A) | `planning.py`: `RecommendationMethod`, `PaymentTemplate`, `PlanCandidate`, `CandidatePool`, `build_no_change_candidate_pool` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.NoChangeCandidateTests` |
 | Spending-change candidate enumeration (WP-07B) | `planning.py`: `SpendingChangeAction`, `FamilyAction`, `enumerate_spending_change_actions`, `build_candidate_pool` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.SpendingChangeCandidateTests` |
 | Ranking and planning decision (WP-07C) | `planning.py`: `PlanningDecision`, `rank_key`, `plan_request` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.RankingAndDecisionTests` |
+| Typed output row, explanation, and codecs (WP-08A) | `output.py`: `OUTPUT_COLUMNS`, `build_output_row`, `explain_decision`, `serialize_output_row`, `parse_output_row`, `OutputValidationError` | `tests/test_output.py` — `python3 -m unittest tests.test_output.OutputRowBuildAndCodecTests` |
 
 ## Dependency Fan-Out
 

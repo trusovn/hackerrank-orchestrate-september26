@@ -86,6 +86,14 @@ class PaymentMethod(Enum):
     INSTALLMENTS = "installments"
 
 
+class RecommendedPaymentMethod(Enum):
+    FULL_PAYMENT = "full_payment"
+    PARTIAL_PAYMENT = "partial_payment"
+    INSTALLMENTS = "installments"
+    WAIT = "wait"
+    NOT_RECOMMENDED = "not_recommended"
+
+
 class AffordabilityStatus(Enum):
     AFFORDABLE_NOW = "affordable_now"
     AFFORDABLE_WITH_PLAN = "affordable_with_plan"
@@ -239,7 +247,7 @@ class OutputRow:
     request_id: str
     amount_safe_to_pay: Decimal
     affordability_status: AffordabilityStatus
-    recommended_payment_method: PaymentMethod | None
+    recommended_payment_method: RecommendedPaymentMethod
     payment_plan: tuple[Payment, ...]
     earliest_date_for_full_payment: date | None
     spending_changes_needed: tuple[SpendingChange, ...]

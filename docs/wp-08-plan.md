@@ -1,6 +1,6 @@
 # WP-08 — Output Row, Explanation, Validation, And Atomic Writer
 
-Status: **READY — SEQUENTIAL THREE-PART IMPLEMENTATION**
+Status: **IN PROGRESS — WP-08A ACCEPTED (2026-09-13), WP-08B AND WP-08C PENDING**
 
 Authority: [`master-plan.md`](master-plan.md), WP-08; governed by
 [`../problem_statement.md`](../problem_statement.md), especially Required
@@ -56,10 +56,9 @@ Run the parts sequentially because all three own `output.py` and
 | Read-only context | accepted `planning.py` decision/capacity/replay records, `forecast.py` baseline records, `RequestCase`, nearby planning tests, and the authorities above |
 | Out of scope | WP-07 ranking changes; forecast/evidence/event policy; CLI/pipeline wiring; sample calibration; full-dataset execution; usage reporting; provider calls; explanation polish beyond small deterministic templates |
 
-At brief creation, WP-07C implementation is present in the shared working tree
-and awaits fresh independent acceptance. Treat those bytes as user work. The
-WP-08A implementer must inspect the accepted result rather than adapt to or
-edit a half-finished seam.
+WP-07C was accepted (2026-09-13) before WP-08A edits began; the WP-08A
+implementer inspected the accepted result rather than adapting to or editing a
+half-finished seam.
 
 ## Proposed Architecture And Data Flow
 
@@ -193,7 +192,7 @@ unsupported custom text rejectable without attempting to fact-check prose.
 
 # WP-08A — Build And Canonically Render One Output Row
 
-Status: **READY AFTER WP-07C ACCEPTANCE**
+Status: **ACCEPTED (2026-09-13)**
 
 ```yaml
 agent_tier: standard
@@ -253,6 +252,47 @@ I/O.
 | Shared contract | domain loading/parsing remains unchanged | `python3 -m unittest tests.test_repository` |
 | Compile | source/tests compile | `python3 -m compileall -q code tests` |
 | Broader gate | fresh A reviewer on final A bytes | `python3 -m unittest tests.test_planning tests.test_output` then `git diff --check` |
+
+## WP-08A Review Record
+
+- Review date: 2026-09-13
+- Profile: guided, fresh independent acceptance review
+- Scope: `output.py`, `tests/test_output.py`, the narrow `domain.py`
+  output-method type correction (`RecommendedPaymentMethod` enum and the
+  `OutputRow` annotation), and the WP-08A navigation rows.
+- Dependency evidence: `python3 -m unittest tests.test_planning` — 47 tests OK.
+- Targeted evidence: `python3 -m unittest
+  tests.test_output.OutputRowBuildAndCodecTests` — 18 tests OK.
+- Shared-contract evidence: `python3 -m unittest tests.test_repository` — 39
+  tests OK (1 skipped); `python3 -m compileall -q code tests` — OK.
+- Independent probes: scalar trimming (`620.40` -> `620.4`, `-0.00` -> `0`,
+  `1E+2` -> `100`), plan exponent handling (`1.2E+2` -> `120`, `1E-1` ->
+  `0.10`, `0.005` precision preserved), mixed-exponent action ordering
+  (`reduce_to:ev1:9.995|reduce_to:ev2:10`), CSV-sensitive round trips, and
+  fallback-vocabulary trace against `planning._fallback_diagnostic` — all
+  clean.
+- Correction cycle: first review found F-01 (integer-valued exponent-2
+  Decimals rendered `300.00` in plan/reduce_to, violating the integers-omit-
+  `.00` rule, and the parser accepted that noncanonical lexeme) and F-02
+  (negative zero rendered `reduce_to:ev1:-0`; only the scalar path normalized
+  the sign). Both fixed on the current bytes: `_plain_decimal` normalizes zero
+  (any sign/exponent) and strips `.00` from integer-valued amounts on all
+  non-scalar paths, and the parse-then-serialize comparison now rejects the
+  noncanonical lexemes. Regression tests added:
+  `test_integer_valued_plan_and_reduce_to_omit_decimal` and
+  `test_negative_zero_normalizes_to_zero_for_plan_and_reduce_to`.
+- Post-correction probes: original P1-P4 rerun plus `1E-1`, `0.005`, `1E+2`,
+  and mixed-exponent ordering variants — all clean; round-trip stability and
+  ordering unaffected.
+- Broad gate: owned by the fresh post-correction reviewer and run —
+  `python3 -m unittest tests.test_output tests.test_planning
+  tests.test_repository` — 106 tests OK (1 skipped); `git diff --check` — OK.
+  The first iteration's gate was premature relative to F-01/F-02; the
+  corrected-bytes gate is final.
+- No open WP-08A findings remain.
+
+Verdict: **ACCEPT** (A-AC-01–A-AC-05 satisfied on the corrected bytes; no open
+findings). WP-08B may proceed through its implementer self-preflight.
 
 ## WP-08A Stops And Handoff
 
@@ -442,8 +482,8 @@ Keep row IDs stable across A/B/C and correction reviews.
 
 | Invariant | Material dimensions/cases | Decisive oracle/boundary | Implementation evidence | Independent review probe | Gate owner |
 |---|---|---|---|---|---|
-| FR-08-01 exact fields/lexemes | five methods; four statuses; safe 0/A/fraction/negative-zero/NaN/exponent; earliest date/empty; plan/action none/populated | typed encode/decode/encode and exact dict | A codec tables and malformed counterexamples | alter only a numeric lexeme; parser rejects noncanonical form | A implementer/reviewer |
-| FR-08-02 grounded explanations | full unchanged/changed; partial; installments fee zero/nonzero; wait unchanged/changed; four fallbacks | exact renderer from case/baseline/decision | A template fixtures and forbidden-claim assertions | swap fallback reason or wait date; text changes/rejects | A implementer/reviewer |
+| FR-08-01 exact fields/lexemes | five methods; four statuses; safe 0/A/fraction/negative-zero/NaN/exponent; earliest date/empty; plan/action none/populated | typed encode/decode/encode and exact dict | A codec tables and malformed counterexamples | alter only a numeric lexeme; parser rejects noncanonical form | A implementer/reviewer — **pass on corrected bytes (2026-09-13; F-01/F-02 found and fixed)** |
+| FR-08-02 grounded explanations | full unchanged/changed; partial; installments fee zero/nonzero; wait unchanged/changed; four fallbacks | exact renderer from case/baseline/decision | A template fixtures and forbidden-claim assertions | swap fallback reason or wait date; text changes/rejects | A implementer/reviewer — **pass on accepted A bytes (2026-09-13)** |
 | FR-08-03 status/method table | full now/changed; partial; installment; wait unchanged/changed; four fallbacks | validator-derived table versus row | B valid rows plus single-field corruption | pair affordable-now with changes or later with changed wait; reject | B implementer/reviewer |
 | FR-08-04 exact eligible plans | full/wait; partial two; installment 2/3/N; before D/deadline/horizon; bad total/order/count/cap/preference | payments plus source option/request/profile | B boundary tables | mutate installment date preserving count/total; reject | B implementer/reviewer |
 | FR-08-05 exact eligible actions | 0/1/2/3/4; stop/reduce; fixed/protected/disallowed/floor; duplicate family/conflict | public series catalogue plus case/profile/replay | B allowed/adversarial tables | use another occurrence ID of same family to hide conflict; reject | B implementer/reviewer |
