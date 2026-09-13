@@ -118,6 +118,44 @@ or `LedgerTests` in `tests/test_forecast.py`.
 Boundary validation or conservative blocking issue -> `_Builder._validate_boundary`,
 `ForecastBuildError`, and `tests/test_forecast.py::BoundaryValidationTests`
 
+## Test Fixtures And Helpers
+
+Tests that need the participant-facing `dataset/` build it via
+`DatasetRepository.from_directory("dataset")` in `setUpClass` and `skipTest`
+when it is missing; they never read organizer-only files.
+
+### Oracle fixtures
+
+`tests/fixtures/evidence/` holds deterministic oracle fixtures for the evidence
+boundary. Both files share `schema_version: wp-02-oracle-v1` and a human
+`description`.
+
+| Fixture | Schema | Consumption |
+|---|---|---|
+| `message_oracle.json` | top-level `sample_messages: dict[str, entry]`; each entry `{diagnostics: [...], facts: [{fact_type, amount, currency, effective_date, target_event_id}]}` | `test_evidence.py::SampleMessageOracleTests` (via `_load_oracle("message_oracle.json")["sample_messages"]`) |
+| `image_oracle.json` | top-level `images: dict[str, entry]`; each entry `{fact_type, target_event_id, amount, currency}` | `test_evidence.py::ImageOracleTests` (via `_load_oracle("image_oracle.json")["images"]`) |
+
+`_load_oracle` in `test_evidence.py` skips the class when the fixture file is
+missing. Add new entries by appending a new id; keep the schema fields exact,
+since the classes assert on them wholesale.
+
+### Helper builders
+
+Test classes reuse builder helpers defined at the top of their file. Reuse
+these instead of constructing records inline:
+
+- `test_events.py`: `_request`, `_profile`, `_event`, `_message`, `_image`,
+  `_fact`, `_resolution`, `_case`, `_decisions_by_subject` — the richest helper
+  block; every events test class builds on it.
+- `test_forecast.py`: `_request`, `_case`, and the `_forecast(...)` wrapper that
+  chains repository-free evidence/events/forecast construction.
+- `test_evidence.py`: `_request`, `_profile`, `_event`, `_message`, `_image`,
+  `_case` plus `_load_oracle`.
+- `test_planning.py`: `case()`, `baseline(...)`, `move(...)` builders for
+  capacity/replay scenarios; `test_repository.py` builds temp datasets with
+  `build_minimal_dataset`/`write_dataset`/`mutate` helpers rather than record
+  builders.
+
 ## Verification Commands
 
 Run from the repository root:
@@ -152,7 +190,6 @@ Narrow to one test class, e.g.
 | Baseline forecast | `forecast.py` -> `build_baseline_forecast`, `_Builder.run`, `_Builder._build_ledger` | `tests/test_forecast.py` (`PolicySurfaceTests` through `LedgerTests`) |
 | Provider/model boundary | `ai_boundary.py` -> `ModelProvider`, `invoke_validated`, `OutputValidator` | `tests/test_ai_boundary.py::AiBoundaryTests` |
 | Offline evidence-strategy assessment | `code/evaluation/evidence_strategy.py` (outside this package) | `tests/test_evidence_strategy.py`, oracles under `tests/fixtures/evidence/` |
-
 ## Boundaries
 
 - Deterministic product logic (`domain`, `repository`, `evidence`, `events`)
@@ -172,4 +209,5 @@ Narrow to one test class, e.g.
 ## Maintenance
 
 Update this file in the same change as any module ownership, public symbol, or
-closest-test change under this package (required by root `AGENTS.md` §1).
+closest-test change under this package (required by root `AGENTS.md` §1). This
+file is the single navigation map; there is no separate `tests/` README.
