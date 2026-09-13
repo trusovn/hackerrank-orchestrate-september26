@@ -232,3 +232,216 @@ class CapacityTests(unittest.TestCase):
         )
         perturbed_single = replay_schedule(current_case, source, (Payment(earliest, remainder),))
         self.assertNotEqual(perturbed.checkpoints[-1].headroom, perturbed_single.checkpoints[-1].headroom)
+
+
+# --- WP-07A no-change candidate enumeration ---------------------------------
+
+
+from buy_or_wait.domain import PaymentOptionRecord  # noqa: E402
+from buy_or_wait.planning import (  # noqa: E402
+    RecommendationMethod, build_no_change_candidate_pool,
+)
+
+
+def planner_case(*, methods=(PaymentMethod.FULL_PAYMENT, PaymentMethod.PARTIAL_PAYMENT,
+                             PaymentMethod.INSTALLMENTS), amount="900", deadline="2026-03-01",
+                 allows_partial=True, cap="6", options=()) -> RequestCase:
+    base = case()
+    return replace(
+        base,
+        request=replace(base.request, requested_amount=money(amount), desired_completion_date=d(deadline),
+                        allows_partial_payment=allows_partial),
+        profile=ProfileRecord("user_P", CurrencyCode.ZAR, money("1000"), money("100"), frozenset(),
+                              frozenset(), frozenset({"subscriptions"}), frozenset({"subscriptions"}),
+                              tuple(methods), int(cap) if cap is not None else None),
+        payment_options=tuple(options),
+    )
+
+
+def full_option(request_id: str = "request_P", amount: str = "900", first: str = "2026-01-10") -> PaymentOptionRecord:
+    return PaymentOptionRecord("payment_option_01", request_id, PaymentMethod.FULL_PAYMENT, money(amount),
+                               amount, 1, d(first), None, money("0"), money(amount), amount)
+
+
+def installment_option(option_id: str = "payment_option_02", amount: str = "300", count: int = 3,
+                       first: str = "2026-01-15", freq: int = 20, fee: str = "50",
+                       request_id: str = "request_P") -> PaymentOptionRecord:
+    # Real dataset contract (repository.py): total_payable_amount == payment_amount * count;
+    # financing_fee is a separate disclosure column and never added into the total.
+    total = money(amount) * count
+    return PaymentOptionRecord(option_id, request_id, PaymentMethod.INSTALLMENTS, money(amount), amount,
+                               count, d(first), freq, money(fee), total, str(total))
+
+
+class NoChangeCandidateTests(unittest.TestCase):
+    def test_exact_full_partial_wait_and_installment_shapes(self) -> None:
+        # Scenario B: opening 1000, dip -400 on 01-20, refund +500 on 01-30, request 550.
+        # Safe today 500, earliest full 01-30. Full-now is eligible but unsafe; partial and wait are safe.
+        source = baseline(move("2026-01-10", "opening", "open"),
+                          move("2026-01-20", "debit", "dip", "-400"),
+                          move("2026-01-30", "credit", "refund", "500"))
+        current = planner_case(amount="550", options=(full_option(amount="550"), installment_option()))
+        pool = build_no_change_candidate_pool(current, source)
+        self.assertEqual(pool.request_id, "request_P")
+        self.assertEqual(pool.capacity.amount_safe_to_pay, money("500.00"))
+        self.assertEqual(pool.capacity.earliest_date_for_full_payment, d("2026-01-30"))
+        by_method = {}
+        for candidate in pool.candidates:
+            by_method.setdefault(candidate.recommendation_method, []).append(candidate)
+        # Partial exactly (D, 500) + (F, 50).
+        partial = by_method[RecommendationMethod.PARTIAL_PAYMENT][0]
+        self.assertEqual(partial.payments, (Payment(d("2026-01-10"), money("500.00")),
+                                            Payment(d("2026-01-30"), money("50"))))
+        self.assertEqual(partial.total_paid, money("550"))
+        self.assertIsNone(partial.payment_option_id)
+        self.assertEqual((partial.start, partial.completion, partial.payment_count), (d("2026-01-10"), d("2026-01-30"), 2))
+        self.assertEqual(partial.forecast_debit_reduction, Decimal("0"))
+        self.assertTrue(partial.safety_replay.safe)
+        # Wait exactly (F, A) with no option ID.
+        wait = by_method[RecommendationMethod.WAIT][0]
+        self.assertEqual(wait.payments, (Payment(d("2026-01-30"), money("550")),))
+        self.assertIsNone(wait.payment_option_id)
+        self.assertEqual(wait.total_paid, money("550"))
+        # Full-now template is eligible but unsafe, and is not certified as a candidate.
+        self.assertNotIn(RecommendationMethod.FULL_PAYMENT, by_method)
+        self.assertIn(RecommendationMethod.WAIT, [t.recommendation_method for t in pool.eligible_templates])
+        self.assertIn("unsafe_replay", pool.diagnostics)
+        # Installments reproduce the supplied option exactly: 3 x 300 on 01-15, 02-04, 02-24.
+        installment = by_method[RecommendationMethod.INSTALLMENTS][0]
+        self.assertEqual(installment.payments, (Payment(d("2026-01-15"), money("300")),
+                                                Payment(d("2026-02-04"), money("300")),
+                                                Payment(d("2026-02-24"), money("300"))))
+        self.assertEqual(installment.total_paid, money("900"))
+        self.assertEqual(installment.payment_option_id, "payment_option_02")
+        self.assertEqual(installment.safety_replay.applied_change_event_ids, ())
+        self.assertTrue(pool.candidates)
+
+    def test_exact_full_now_shape_with_option_provenance(self) -> None:
+        # Scenario A: opening 1000 only, request 900: full now safe with option provenance.
+        source = baseline(move("2026-01-10", "opening", "open"))
+        current = planner_case(options=(full_option(),))
+        pool = build_no_change_candidate_pool(current, source)
+        full = [c for c in pool.candidates if c.recommendation_method is RecommendationMethod.FULL_PAYMENT][0]
+        self.assertEqual(full.payments, (Payment(d("2026-01-10"), money("900")),))
+        self.assertEqual(full.payment_option_id, "payment_option_01")
+        self.assertEqual(full.spending_changes, ())
+        self.assertEqual(full.safety_replay.applied_change_event_ids, ())
+        self.assertEqual((full.start, full.completion, full.payment_count), (d("2026-01-10"), d("2026-01-10"), 1))
+        # Partial is not eligible because safe equals requested; wait needs a later date.
+        self.assertNotIn(RecommendationMethod.PARTIAL_PAYMENT, [c.recommendation_method for c in pool.candidates])
+        self.assertNotIn(RecommendationMethod.WAIT, [c.recommendation_method for c in pool.candidates])
+
+    def test_eligibility_gates_are_enforced_independently(self) -> None:
+        source = baseline(move("2026-01-10", "opening", "open"))
+        # Method not accepted removes that method.
+        full_only = planner_case(methods=(PaymentMethod.FULL_PAYMENT,), options=(full_option(),))
+        pool = build_no_change_candidate_pool(full_only, source)
+        self.assertEqual({c.recommendation_method for c in pool.candidates},
+                         {RecommendationMethod.FULL_PAYMENT})
+        # Partial not allowed, and partial amount bounds (safe == requested).
+        no_partial = planner_case(allows_partial=False, options=(full_option(),))
+        pool = build_no_change_candidate_pool(no_partial, source)
+        self.assertNotIn(RecommendationMethod.PARTIAL_PAYMENT, {c.recommendation_method for c in pool.candidates})
+        # Installment cap blocks count > cap and blank/zero cap blocks everything.
+        small_cap = planner_case(cap="2", options=(full_option(), installment_option()))
+        pool = build_no_change_candidate_pool(small_cap, source)
+        self.assertNotIn(RecommendationMethod.INSTALLMENTS, {c.recommendation_method for c in pool.candidates})
+        no_cap = planner_case(cap=None, options=(full_option(), installment_option()))
+        pool = build_no_change_candidate_pool(no_cap, source)
+        self.assertNotIn(RecommendationMethod.INSTALLMENTS, {c.recommendation_method for c in pool.candidates})
+        # First date before request date excludes the option.
+        early = planner_case(options=(full_option(), installment_option(first="2026-01-09")))
+        pool = build_no_change_candidate_pool(early, source)
+        self.assertNotIn(RecommendationMethod.INSTALLMENTS, {c.recommendation_method for c in pool.candidates})
+        # Last date after deadline excludes the option.
+        late = planner_case(options=(full_option(), installment_option(freq=30)))
+        pool = build_no_change_candidate_pool(late, source)
+        self.assertNotIn(RecommendationMethod.INSTALLMENTS, {c.recommendation_method for c in pool.candidates})
+        # Deadline before horizon is the binding gate; horizon-end option is allowed when deadline allows.
+        late_deadline = planner_case(deadline="2026-03-01", options=(
+            full_option(), installment_option(first="2026-03-30", count=2, freq=5)))
+        pool = build_no_change_candidate_pool(late_deadline, source)
+        self.assertNotIn(RecommendationMethod.INSTALLMENTS, {c.recommendation_method for c in pool.candidates})
+
+    def test_unsafe_template_is_retained_but_not_certified(self) -> None:
+        # Full payment of 900 breaches the -1000 dip on 01-20; template stays eligible, no candidate.
+        source = baseline(move("2026-01-10", "opening", "open"), move("2026-01-20", "debit", "dip", "-1000"))
+        current = planner_case(options=(full_option(),))
+        pool = build_no_change_candidate_pool(current, source)
+        self.assertEqual(pool.candidates, ())
+        self.assertEqual(len(pool.eligible_templates), 1)
+        self.assertFalse(pool.eligible_templates[0] in ())
+        unsafe = pool.eligible_templates[0]
+        self.assertEqual(unsafe.payments, (Payment(d("2026-01-10"), money("900")),))
+        self.assertIn("unsafe_replay", pool.diagnostics)
+
+    def test_capacity_is_immutable_across_pools(self) -> None:
+        source = baseline(move("2026-01-10", "opening", "open"),
+                          move("2026-01-20", "debit", "dip", "-400"),
+                          move("2026-01-30", "credit", "refund", "500"))
+        rich = planner_case(options=(full_option(), installment_option()))
+        poor = planner_case(methods=(), options=(full_option(), installment_option()))
+        pool_rich = build_no_change_candidate_pool(rich, source)
+        pool_poor = build_no_change_candidate_pool(poor, source)
+        self.assertEqual(pool_rich.capacity, compute_baseline_capacity(rich, source))
+        self.assertEqual(pool_rich.capacity, pool_poor.capacity)
+
+    def test_empty_pool_is_conservative_and_truthful(self) -> None:
+        source = baseline(move("2026-01-10", "opening", "open"))
+        no_methods = planner_case(methods=(), options=(full_option(),))
+        pool = build_no_change_candidate_pool(no_methods, source)
+        self.assertEqual(pool.candidates, ())
+        self.assertIn("no_accepted_method_full", pool.diagnostics)
+        self.assertEqual(pool.eligible_templates, ())
+
+    def test_fee_bearing_installment_matches_real_dataset_total_contract(self) -> None:
+        # Reviewer regression (P1): real installment options carry a nonzero financing_fee
+        # while total_payable_amount equals principal * count (repository.py option_total_mismatch).
+        source = baseline(move("2026-01-10", "opening", "open"))
+        fee_option = installment_option(amount="300", count=3, fee="25")
+        self.assertEqual(fee_option.total_payable_amount, money("900"))
+        current = planner_case(options=(fee_option,))
+        pool = build_no_change_candidate_pool(current, source)
+        installment = [c for c in pool.candidates if c.recommendation_method is RecommendationMethod.INSTALLMENTS]
+        self.assertEqual(len(installment), 1)
+        self.assertEqual(installment[0].payments, (Payment(d("2026-01-15"), money("300")),
+                                                   Payment(d("2026-02-04"), money("300")),
+                                                   Payment(d("2026-02-24"), money("300"))))
+        self.assertEqual(installment[0].total_paid, money("900"))
+
+    def test_installment_total_mismatch_is_rejected(self) -> None:
+        source = baseline(move("2026-01-10", "opening", "open"))
+        wrong_total = replace(installment_option(), total_payable_amount=money("901"))
+        current = planner_case(options=(wrong_total,))
+        pool = build_no_change_candidate_pool(current, source)
+        self.assertNotIn(RecommendationMethod.INSTALLMENTS, {c.recommendation_method for c in pool.candidates})
+        self.assertIn("installment_option_invalid", pool.diagnostics)
+
+    def test_wait_eligibility_does_not_require_supplied_full_option(self) -> None:
+        # F-01 regression: wait eligibility depends only on full-payment acceptance and
+        # D < F <= deadline; the supplied full option is provenance, never a gate.
+        source = baseline(move("2026-01-10", "opening", "open"),
+                          move("2026-01-20", "debit", "dip", "-400"),
+                          move("2026-01-30", "credit", "refund", "500"))
+        current = planner_case(amount="550", options=())
+        pool = build_no_change_candidate_pool(current, source)
+        waits = [c for c in pool.candidates if c.recommendation_method is RecommendationMethod.WAIT]
+        self.assertEqual(len(waits), 1)
+        self.assertEqual(waits[0].payments, (Payment(d("2026-01-30"), money("550")),))
+        self.assertIsNone(waits[0].payment_option_id)
+
+    def test_wait_absent_when_full_payment_not_accepted(self) -> None:
+        source = baseline(move("2026-01-10", "opening", "open"),
+                          move("2026-01-20", "debit", "dip", "-400"),
+                          move("2026-01-30", "credit", "refund", "500"))
+        current = planner_case(amount="550", methods=(PaymentMethod.INSTALLMENTS,), options=())
+        pool = build_no_change_candidate_pool(current, source)
+        self.assertNotIn(RecommendationMethod.WAIT, {c.recommendation_method for c in pool.candidates})
+        self.assertIn("no_accepted_method_wait", pool.diagnostics)
+
+    def test_full_option_contract_is_validated(self) -> None:
+        source = baseline(move("2026-01-10", "opening", "open"))
+        # Full accepted but the supplied full option does not match amount/date/count.
+        wrong = planner_case(options=(full_option(amount="800",),))
+        with self.assertRaises(PlanningError):
+            build_no_change_candidate_pool(wrong, source)

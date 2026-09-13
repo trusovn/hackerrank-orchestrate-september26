@@ -281,7 +281,8 @@ supports WP-08 explanation but is not itself user-facing prose.
 
 # WP-07A — Enumerate And Certify No-Change Candidates
 
-Status: **READY**
+Status: **ACCEPTED** — final verdict ACCEPT (2026-09-13), see Review Record
+below
 
 ```yaml
 agent_tier: standard
@@ -358,6 +359,43 @@ preserving the accepted baseline capacity result unchanged.
 - Required follow-on: immediately after implementation or correction, hand the
   completed bytes to a fresh independent acceptance reviewer. Only accepted
   WP-07A bytes unblock WP-07B.
+
+## Review Record
+
+- Review date: 2026-09-13
+- Profile: guided, fresh independent acceptance review
+- Scope: `planning.py`, `test_planning.py`, and the WP-07A navigation rows in
+  `code/buy_or_wait/README.md` and `docs/project-map.md`.
+- Dependency evidence: `python3 -m unittest
+  tests.test_planning.SafetyReplayTests tests.test_planning.CapacityTests` — OK.
+- Targeted evidence: `python3 -m unittest
+  tests.test_planning.NoChangeCandidateTests` — 11 tests OK (25 OK with
+  dependencies).
+- Independent regressions: interval mutation (freq 20 -> 15) keeps count and
+  amount exact and recomputes dates without resizing; stripping every method
+  leaves `CapacityResult` byte-identical with an empty pool; wait eligibility
+  produces `(F, A)` with no option ID when full payment is accepted and no full
+  option is supplied; installment fee is a separate disclosure, never added to
+  `total_payable_amount` (repository `option_total_mismatch` and dataset rows
+  agree: principal x count = total).
+- Correction cycle: first review found F-01 (wait template gated on the
+  supplied full option, contradicting the shared baseline-wait rule) and F-02
+  (dead `_earliest_full`). Both fixed on the current bytes: wait eligibility
+  depends only on full-payment acceptance and `D < F <= deadline`, and
+  `_earliest_full` was removed, with regression tests
+  `test_wait_eligibility_does_not_require_supplied_full_option`,
+  `test_wait_absent_when_full_payment_not_accepted`, and
+  `test_fee_bearing_installment_matches_real_dataset_total_contract`.
+- Owning and repository gates: `python3 -m unittest tests.test_planning` — 25
+  tests OK; `python3 -m unittest tests.test_forecast` — 72 tests OK;
+  `python3 -m unittest tests.test_agent_foundation_contract` — 3 tests OK;
+  `python3 -m compileall -q code tests` — OK; `git diff --check` — OK.
+- Broad gate: deferred to the fresh final WP-07C reviewer per the split
+  verification contract.
+- No open WP-07A findings remain.
+
+Verdict: **ACCEPT** (A-AC-01–A-AC-05 satisfied; no open findings). WP-07B may
+proceed through its implementer self-preflight.
 
 ---
 

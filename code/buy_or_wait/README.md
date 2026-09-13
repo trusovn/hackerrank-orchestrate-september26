@@ -38,6 +38,7 @@ Read only the matching function and the nearest relevant test class.
 | Event lifecycle, reserves, transfer pairing, or FX | `events.py`: `normalize_case_events`, `convert_exact`, `EventNormalization`, `EventNormalizationError` | `tests/test_events.py` — `python3 -m unittest tests.test_events` |
 | Recurrence, variable-spending envelope, income, or baseline ledger | `forecast.py`: `build_baseline_forecast`, `BaselineForecast`, `ForecastPolicy`, `ForecastBuildError` | `tests/test_forecast.py` — `python3 -m unittest tests.test_forecast` |
 | Payment replay or baseline capacity | `planning.py`: `replay_schedule`, `compute_baseline_capacity`, `SafetyReplay`, `CapacityResult`, `PlanningError` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.SafetyReplayTests` or `python3 -m unittest tests.test_planning.CapacityTests` |
+| No-change candidate enumeration (WP-07A) | `planning.py`: `RecommendationMethod`, `PaymentTemplate`, `PlanCandidate`, `CandidatePool`, `build_no_change_candidate_pool` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.NoChangeCandidateTests` |
 
 ## Package Boundaries
 
