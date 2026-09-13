@@ -431,6 +431,10 @@ every later candidate independently replayable.
 
 ### WP-07 — Candidate plans, spending changes, and ranking
 
+**Status:** ACCEPTED (2026-09-13) — `code/buy_or_wait/planning.py` and
+`tests/test_planning.py`; `python3 -m unittest tests.test_planning` (47 OK);
+full suite 302 OK. See Review Records in the WP-07 plan.
+
 **Depends on:** WP-06
 
 **Goal:** Enumerate all and only eligible candidates, replay them, and choose

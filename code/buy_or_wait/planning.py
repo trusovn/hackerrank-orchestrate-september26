@@ -8,7 +8,8 @@ from decimal import ROUND_FLOOR, Decimal
 from enum import Enum
 
 from buy_or_wait.domain import (
-    Flexibility, Payment, PaymentMethod, PaymentOptionRecord, RequestCase, SpendingChange, SpendingChangeType,
+    AffordabilityStatus, Flexibility, Payment, PaymentMethod, PaymentOptionRecord, RequestCase, SpendingChange,
+    SpendingChangeType,
 )
 from buy_or_wait.events import EventNormalizationError, convert_exact
 from buy_or_wait.forecast import BaselineForecast, PrimitiveMovement
@@ -666,6 +667,128 @@ def _changed_templates(case: RequestCase, baseline: BaselineForecast,
                         candidates.append(PlanCandidate(method, (Payment(earliest, requested),), changes,
                                                         None, replay, reduction))
     return candidates, diagnostics
+
+
+# --- WP-07C ranking and decision ---------------------------------------------
+
+
+@dataclass(frozen=True)
+class PlanningDecision:
+    request_id: str
+    capacity: CapacityResult
+    selected_candidate: PlanCandidate | None
+    affordability_status: AffordabilityStatus
+    recommended_method: RecommendationMethod
+    diagnostics: tuple[str, ...]
+
+
+_METHOD_KEY = {
+    RecommendationMethod.FULL_PAYMENT: 0,
+    RecommendationMethod.PARTIAL_PAYMENT: 1,
+    RecommendationMethod.INSTALLMENTS: 2,
+    RecommendationMethod.WAIT: 3,
+    RecommendationMethod.NOT_RECOMMENDED: 4,
+}
+
+
+def _rendered_action_text(changes: tuple[SpendingChange, ...]) -> str:
+    return ";".join(f"{change.change_type.value}:{change.event_id}:{change.new_amount}"
+                    for change in changes)
+
+
+class _OptionTieKey:
+    """Total three-state option key: supplied offers sort before derived plans,
+    and supplied offers compare by stable text ID among themselves.
+
+    Comparing residuals (actions, reduction, action text) before this key keeps
+    mixed supplied/derived pairs decided by the published residual criteria,
+    while the total order here removes the input-order dependence of min().
+    """
+
+    __slots__ = ("is_supplied", "option_id")
+
+    def __init__(self, option_id: str | None) -> None:
+        self.is_supplied = option_id is not None
+        self.option_id = option_id or ""
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, _OptionTieKey):
+            return NotImplemented
+        return (self.is_supplied == other.is_supplied
+                and self.option_id == other.option_id)
+
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, _OptionTieKey):
+            return NotImplemented
+        if self.is_supplied != other.is_supplied:
+            return self.is_supplied
+        return self.option_id < other.option_id
+
+
+def rank_key(candidate: PlanCandidate) -> tuple:
+    """Published deterministic comparator: every key is explicit, never ordinal/order.
+
+    The residual keys precede the total option key so mixed supplied/derived
+    pairs stay decided by published residual criteria; the option key remains
+    total so the comparator is a strict total order for every candidate set.
+    """
+    return (
+        1 if candidate.spending_changes else 0,
+        candidate.total_paid,
+        candidate.start,
+        candidate.payment_count,
+        len(candidate.spending_changes),
+        candidate.forecast_debit_reduction,
+        _rendered_action_text(candidate.spending_changes),
+        _OptionTieKey(candidate.payment_option_id),
+        _METHOD_KEY[candidate.recommendation_method],
+    )
+
+
+def _fallback_diagnostic(case: RequestCase, baseline: BaselineForecast,
+                         pool: CandidatePool) -> str:
+    """Truthful precedence: uncertified; after-deadline-only; no method/option; no safe candidate."""
+    if baseline.blocks_downstream or baseline.minimum_headroom is None:
+        return "fallback_baseline_uncertified"
+    deadline = case.request.desired_completion_date
+    search_end = min(deadline, baseline.horizon_end)
+    deadline_days = (search_end - case.request.request_date).days
+    horizon_days = (baseline.horizon_end - case.request.request_date).days
+    possible_within_deadline = any(
+        replay_schedule(case, baseline,
+                        (Payment(case.request.request_date + timedelta(days=offset),
+                                 case.request.requested_amount),)).safe
+        for offset in range(deadline_days + 1))
+    if not possible_within_deadline:
+        # Financially possible only after the deadline, regardless of preferences.
+        for offset in range(deadline_days + 1, horizon_days + 1):
+            day = case.request.request_date + timedelta(days=offset)
+            if replay_schedule(case, baseline, (Payment(day, case.request.requested_amount),)).safe:
+                return "fallback_possible_after_deadline"
+    if not pool.eligible_templates:
+        return "fallback_no_accepted_method"
+    return "fallback_no_safe_candidate"
+
+
+def plan_request(case: RequestCase, baseline: BaselineForecast) -> PlanningDecision:
+    """Rank certified candidates and derive one status/method from the winner."""
+    pool = build_candidate_pool(case, baseline)
+    if not pool.candidates:
+        diagnostic = _fallback_diagnostic(case, baseline, pool)
+        return PlanningDecision(pool.request_id, pool.capacity, None,
+                                AffordabilityStatus.NOT_AFFORDABLE,
+                                RecommendationMethod.NOT_RECOMMENDED, (diagnostic,))
+    winner = min(pool.candidates, key=rank_key)
+    method = winner.recommendation_method
+    if method is RecommendationMethod.WAIT:
+        status = (AffordabilityStatus.AFFORDABLE_LATER if not winner.spending_changes
+                  else AffordabilityStatus.AFFORDABLE_WITH_PLAN)
+    elif method is RecommendationMethod.FULL_PAYMENT:
+        status = (AffordabilityStatus.AFFORDABLE_NOW if not winner.spending_changes
+                  else AffordabilityStatus.AFFORDABLE_WITH_PLAN)
+    else:
+        status = AffordabilityStatus.AFFORDABLE_WITH_PLAN
+    return PlanningDecision(pool.request_id, pool.capacity, winner, status, method, ())
 
 
 def build_candidate_pool(case: RequestCase, baseline: BaselineForecast) -> CandidatePool:

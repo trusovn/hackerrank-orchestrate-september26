@@ -1,6 +1,6 @@
 # WP-07 — Candidate Plans, Spending Changes, And Ranking
 
-Status: **READY — SEQUENTIAL THREE-PART IMPLEMENTATION**
+Status: **COMPLETE — WP-07A ACCEPTED, WP-07B ACCEPTED, WP-07C ACCEPTED (2026-09-13)**
 
 Authority: [`master-plan.md`](master-plan.md), WP-07
 
@@ -535,7 +535,8 @@ findings). WP-07C may proceed through its implementer self-preflight.
 
 # WP-07C — Rank Candidates And Return One Decision
 
-Status: **READY**
+Status: **ACCEPTED** — final verdict ACCEPT (2026-09-13), see Review Record
+below
 
 ```yaml
 agent_tier: standard
@@ -611,6 +612,58 @@ fallback when the pool is empty.
 | Compile | Product/tests compile with the standard library | `python3 -m compileall -q code tests` |
 | Broader gate | Fresh WP-07C reviewer owns aggregate verification on final bytes | `python3 -m unittest discover -s tests -p 'test_*.py'` then `git diff --check` |
 
+## Review Record
+
+- Review date: 2026-09-13
+- Profile: guided, fresh independent acceptance review (three rounds: initial
+  CHANGES_REQUESTED, then correction rounds on the fixed bytes)
+- Scope: `planning.py`, `test_planning.py`, and the WP-07C navigation rows in
+  `code/buy_or_wait/README.md` and `docs/project-map.md`.
+- Initial round: F-01 (P2) `rank_key` compared the option-ID key before the
+  residual action/reduction/text keys, so a mixed supplied/derived pair could
+  be decided by the option-ID state instead of the published residuals;
+  F-02 (P2) `_fallback_diagnostic` checked the no-accepted-method template
+  proxy before the financially-possible-after-deadline scan, misclassifying
+  "safe within deadline but unaccepted" as `fallback_no_safe_candidate`.
+- Correction round on the fixed bytes: F-01 fixed by moving the option key
+  after the residual keys; F-02 fixed by scanning after-deadline full-payment
+  possibility before the no-eligible-option template check. Independent
+  pairwise probes (derived-1-action beats supplied-2-actions; supplied-1-action
+  beats derived-2-actions; supplied-only stable text order
+  `payment_option_10` < `payment_option_2`) and fallback probes ((a) `methods=()`
+  with safe-only-after-deadline → `fallback_possible_after_deadline`;
+  (b) installments accepted with no option → `fallback_no_accepted_method`;
+  (b-real) eligible-but-unsafe option → `fallback_no_safe_candidate`;
+  (d) blocked baseline → `fallback_baseline_uncertified`) all pass.
+- Second correction round: F-03 (P2) `_OptionTieKey` made the comparator
+  non-total for mixed supplied/derived twins (`A == C` while `A < B` and
+  `B < C`), so `min()` winner identity was input-order-dependent, violating
+  C-AC-02/FR-08. Fixed by making the option key a total three-state order
+  (supplied before derived, supplied IDs by stable text) placed after the
+  residual keys; the mixed twin set now has the strict total order
+  `C < A < B` and every one of the six candidate permutations returns the same
+  winner. Regression tests added: `test_residual_ties_are_total_and_permutation_independent`
+  (F-01/F-03 rows), `test_fallback_classes_are_truthful_and_ordered`
+  (F-02 rows).
+- Dependency evidence: `python3 -m unittest
+  tests.test_planning.NoChangeCandidateTests tests.test_planning.SpendingChangeCandidateTests` — 28 tests OK.
+- Targeted evidence: `python3 -m unittest
+  tests.test_planning.RankingAndDecisionTests` — 5 tests OK.
+- Owning and repository gates: `python3 -m unittest tests.test_planning` — 47
+  tests OK; `python3 -m unittest tests.test_forecast` — 72 tests OK;
+  `python3 -m unittest tests.test_agent_foundation_contract` — 3 tests OK;
+  `python3 -m unittest discover -s tests -p 'test_*.py'` — 302 tests OK
+  (1 skipped); `python3 -m compileall -q code tests` — OK; `git diff --check`
+  — OK. Full 250-request dataset pipeline processed with status distribution
+  unchanged (affordable_now 9, affordable_with_plan 9, affordable_later 1,
+  not_affordable 231) and no rank_key-vs-brief_key winner diffs.
+- Broad gate: owned by this fresh final WP-07C reviewer on the corrected
+  bytes; run and passed.
+- No open WP-07C findings remain.
+
+Verdict: **ACCEPT** (C-AC-01–C-AC-06 satisfied on the corrected bytes; no open
+findings). WP-07 package exit criteria are met; WP-08 may proceed.
+
 ## WP-07C Stops And Handoff
 
 - Stop without fresh WP-07B acceptance or on shared-file overlap.
@@ -650,4 +703,5 @@ order; every FR row is recorded pass on the final relevant bytes;
 and focused classes are present in both navigation maps; the final fresh
 reviewer owns and passes the complete unit suite and `git diff --check`; and no
 WP-07 change touches upstream financial behavior or WP-08 output concerns.
+All criteria are met on the accepted WP-07C bytes; WP-08 may proceed.
 

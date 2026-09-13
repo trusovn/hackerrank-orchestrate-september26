@@ -19,7 +19,8 @@ from buy_or_wait.forecast import (  # noqa: E402
     BaselineForecast, Checkpoint, PrimitiveMovement,
 )
 from buy_or_wait.planning import (  # noqa: E402
-    PlanningError, compute_baseline_capacity, replay_schedule,
+    PlanningError, PlanCandidate, PlanningDecision, SafetyReplay, plan_request, rank_key,
+    compute_baseline_capacity, replay_schedule,
 )
 
 
@@ -821,3 +822,229 @@ class SpendingChangeCandidateTests(unittest.TestCase):
                         self.assertTrue(candidate.safety_replay.safe)
                         self.assertEqual(tuple(candidate.safety_replay.applied_change_event_ids),
                                          tuple(sorted({change.event_id for change in candidate.spending_changes})))
+
+
+# --- WP-07C ranking and decision ---------------------------------------------
+
+
+from buy_or_wait.domain import AffordabilityStatus  # noqa: E402
+from buy_or_wait.planning import (  # noqa: E402
+    PlanningDecision, plan_request,
+)
+
+
+def candidate(method: RecommendationMethod, *, payments: tuple[Payment, ...] | None = None,
+              changes: tuple[SpendingChange, ...] = (), option_id: str | None = None,
+              reduction: str = "0") -> PlanCandidate:
+    if payments is None:
+        payments = (Payment(d("2026-01-10"), money("900")),)
+    replay = SafetyReplay("request_P", True, (), money("100"), None, ())
+    return PlanCandidate(method, payments, changes, option_id, replay, money(reduction))
+
+
+class RankingAndDecisionTests(unittest.TestCase):
+    def _pool_case(self, **kwargs) -> RequestCase:
+        return planner_case(**kwargs)
+
+    def test_published_order_decides_one_variable_at_a_time(self) -> None:
+        # FR-07 pairwise table: cheaper changed plan must still lose to no-change.
+        no_change = candidate(RecommendationMethod.INSTALLMENTS, option_id="payment_option_02",
+                              payments=(Payment(d("2026-01-15"), money("300")), Payment(d("2026-02-04"), money("300")),
+                                        Payment(d("2026-02-24"), money("300"))))
+        cheaper_changed = candidate(RecommendationMethod.FULL_PAYMENT,
+                                    changes=(SpendingChange(SpendingChangeType.STOP, "dip_event"),))
+        winner = min([cheaper_changed, no_change], key=rank_key)
+        self.assertIs(winner, no_change)
+        # Lower exact total paid wins next.
+        cheap = candidate(RecommendationMethod.FULL_PAYMENT, option_id="a",
+                          payments=(Payment(d("2026-01-10"), money("800")),))
+        pricey = candidate(RecommendationMethod.INSTALLMENTS, option_id="b",
+                           payments=(Payment(d("2026-01-10"), money("400")), Payment(d("2026-01-11"), money("500"))))
+        self.assertIs(min([pricey, cheap], key=rank_key), cheap)
+        # Earlier start date, then fewer payments (equal starts isolate the count key).
+        later_start = candidate(RecommendationMethod.WAIT,
+                                payments=(Payment(d("2026-01-16"), money("800")),))
+        self.assertIs(min([later_start, cheap], key=rank_key), cheap)
+        two = candidate(RecommendationMethod.PARTIAL_PAYMENT, option_id="c",
+                        payments=(Payment(d("2026-01-10"), money("400")), Payment(d("2026-01-12"), money("400"))))
+        self.assertIs(min([two, cheap], key=rank_key), cheap)
+        # Two supplied offers: stable text order decides (payment_option_10 < payment_option_2).
+        ten = candidate(RecommendationMethod.FULL_PAYMENT, option_id="payment_option_10")
+        two_id = candidate(RecommendationMethod.FULL_PAYMENT, option_id="payment_option_2")
+        self.assertIs(min([ten, two_id], key=rank_key), ten)
+
+    def test_residual_ties_are_total_and_permutation_independent(self) -> None:
+        # Equal primaries: action count, then reduction, then action text, then method key.
+        one_action = candidate(RecommendationMethod.WAIT,
+                               changes=(SpendingChange(SpendingChangeType.STOP, "ev_z"),))
+        two_actions = candidate(RecommendationMethod.WAIT,
+                                changes=(SpendingChange(SpendingChangeType.STOP, "ev_a"),
+                                         SpendingChange(SpendingChangeType.STOP, "ev_b")))
+        self.assertIs(min([two_actions, one_action], key=rank_key), one_action)  # fewer actions
+        small = candidate(RecommendationMethod.WAIT,
+                          changes=(SpendingChange(SpendingChangeType.STOP, "ev_a"),), reduction="100")
+        large = candidate(RecommendationMethod.WAIT,
+                          changes=(SpendingChange(SpendingChangeType.STOP, "ev_b"),), reduction="200")
+        self.assertIs(min([large, small], key=rank_key), small)
+        text_a = candidate(RecommendationMethod.WAIT,
+                           changes=(SpendingChange(SpendingChangeType.STOP, "ev_a"),), reduction="100")
+        text_b = candidate(RecommendationMethod.WAIT,
+                           changes=(SpendingChange(SpendingChangeType.STOP, "ev_z"),), reduction="100")
+        self.assertIs(min([text_b, text_a], key=rank_key), text_a)
+        # Method key: supplied versus derived with every preceding field equal.
+        derived_wait = candidate(RecommendationMethod.WAIT)
+        supplied_full = candidate(RecommendationMethod.FULL_PAYMENT, option_id="x")
+        self.assertIs(min([derived_wait, supplied_full], key=rank_key), supplied_full)
+        # F-01 regression: mixed supplied/derived pairs are decided by the
+        # residual keys, which precede the option key. A derived WAIT with one
+        # action must beat a supplied WAIT with two actions when all published
+        # primaries tie.
+        derived_one_action = candidate(RecommendationMethod.WAIT,
+                                       changes=(SpendingChange(SpendingChangeType.STOP, "ev_z"),))
+        supplied_two_actions = candidate(RecommendationMethod.WAIT, option_id="payment_option_2",
+                                         changes=(SpendingChange(SpendingChangeType.STOP, "ev_a"),
+                                                  SpendingChange(SpendingChangeType.STOP, "ev_b")))
+        self.assertIs(min([supplied_two_actions, derived_one_action], key=rank_key), derived_one_action)
+        # F-03 regression: the option key is a total three-state order
+        # (supplied before derived, supplied IDs by stable text), so a derived
+        # candidate between two supplied offers cannot make the comparison
+        # intransitive. The mixed set has one total order C < A < B and every
+        # permutation of it must return the same winner identity.
+        option_a = candidate(RecommendationMethod.WAIT,
+                             changes=(SpendingChange(SpendingChangeType.STOP, "ev_z"),))
+        option_b = candidate(RecommendationMethod.WAIT, option_id="payment_option_2",
+                             changes=(SpendingChange(SpendingChangeType.STOP, "ev_a"),
+                                      SpendingChange(SpendingChangeType.STOP, "ev_b")))
+        option_c = candidate(RecommendationMethod.WAIT, option_id="payment_option_10",
+                             changes=(SpendingChange(SpendingChangeType.STOP, "ev_z"),))
+        self.assertLess(rank_key(option_c), rank_key(option_a))
+        self.assertLess(rank_key(option_a), rank_key(option_b))
+        mixed = [option_a, option_b, option_c]
+        import itertools
+        reference = min(mixed, key=rank_key)
+        for permutation in itertools.permutations(range(3)):
+            self.assertIs(min([mixed[i] for i in permutation], key=rank_key), reference)
+        # Residual keys still decide supplied-only pairs after the option-ID key.
+        supplied_stop = candidate(RecommendationMethod.WAIT, option_id="o_a",
+                                  changes=(SpendingChange(SpendingChangeType.STOP, "ev_z"),))
+        supplied_two = candidate(RecommendationMethod.WAIT, option_id="o_z",
+                                 changes=(SpendingChange(SpendingChangeType.STOP, "ev_a"),
+                                          SpendingChange(SpendingChangeType.STOP, "ev_b")))
+        self.assertIs(min([supplied_two, supplied_stop], key=rank_key), supplied_stop)
+        # Equal supplied offers fall through to residual keys, not numeric ID parsing.
+        cheap_supplied = candidate(RecommendationMethod.FULL_PAYMENT, option_id="payment_option_2",
+                                   payments=(Payment(d("2026-01-10"), money("800")),))
+        costly_supplied = candidate(RecommendationMethod.FULL_PAYMENT, option_id="payment_option_10",
+                                    payments=(Payment(d("2026-01-10"), money("900")),))
+        self.assertIs(min([costly_supplied, cheap_supplied], key=rank_key), cheap_supplied)
+        # Permutation invariance over an equal-primary set (equal supplied offers).
+        equal = [candidate(RecommendationMethod.WAIT, option_id=f"o{i}", reduction="0") for i in range(3)]
+        for permutation in ((2, 1, 0), (1, 0, 2), (2, 0, 1)):
+            self.assertIs(min([equal[i] for i in permutation], key=rank_key),
+                          min(equal, key=rank_key))
+
+    def test_status_method_table_rows(self) -> None:
+        # Full at D without changes -> affordable_now/full_payment.
+        source = baseline(move("2026-01-10", "opening", "open"))
+        current = self._pool_case(options=(full_option(),))
+        decision = plan_request(current, source)
+        self.assertEqual((decision.affordability_status, decision.recommended_method),
+                         (AffordabilityStatus.AFFORDABLE_NOW, RecommendationMethod.FULL_PAYMENT))
+        self.assertEqual(decision.selected_candidate.payment_option_id, "payment_option_01")
+        self.assertEqual(decision.capacity.amount_safe_to_pay, money("900"))
+        # Wait after D without changes -> affordable_later/wait (partial not considered).
+        wait_source = baseline(move("2026-01-10", "opening", "open"),
+                               move("2026-01-20", "debit", "dip", "-400"),
+                               move("2026-01-30", "credit", "refund", "500"))
+        wait_case = planner_case(amount="550", methods=(PaymentMethod.FULL_PAYMENT,), options=())
+        decision = plan_request(wait_case, wait_source)
+        self.assertEqual((decision.affordability_status, decision.recommended_method),
+                         (AffordabilityStatus.AFFORDABLE_LATER, RecommendationMethod.WAIT))
+        # Full at D with changes -> affordable_with_plan/full_payment.
+        changed_source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-20", "dip1", "dip_series", "400", source_ids=("dip_event",)),
+        )
+        changed_case = change_case(amount="900", events=(expense("dip_event", "dining", Flexibility.STOPPABLE),),
+                                   deadline="2026-02-28")
+        decision = plan_request(changed_case, changed_source)
+        self.assertEqual((decision.affordability_status, decision.recommended_method),
+                         (AffordabilityStatus.AFFORDABLE_WITH_PLAN, RecommendationMethod.FULL_PAYMENT))
+        # Installments -> affordable_with_plan/installments (full-now breaches; three
+        # 300 installments clear the dip with an interim credit; installments start
+        # earlier than wait at equal cost, so the comparator picks installments).
+        inst_source = baseline(move("2026-01-10", "opening", "open"),
+                               move("2026-01-20", "debit", "dip", "-300"),
+                               move("2026-02-10", "credit", "refund", "300"))
+        inst_case = planner_case(amount="900", methods=(PaymentMethod.FULL_PAYMENT, PaymentMethod.INSTALLMENTS),
+                                 options=(installment_option(),))
+        decision = plan_request(inst_case, inst_source)
+        self.assertEqual((decision.affordability_status, decision.recommended_method),
+                         (AffordabilityStatus.AFFORDABLE_WITH_PLAN, RecommendationMethod.INSTALLMENTS))
+        partial_case = planner_case(amount="550", options=())
+        partial_source = baseline(move("2026-01-10", "opening", "open"),
+                                  move("2026-01-20", "debit", "dip", "-400"),
+                                  move("2026-01-30", "credit", "refund", "500"))
+        decision = plan_request(partial_case, partial_source)
+        self.assertEqual((decision.affordability_status, decision.recommended_method),
+                         (AffordabilityStatus.AFFORDABLE_WITH_PLAN, RecommendationMethod.PARTIAL_PAYMENT))
+
+    def test_fallback_classes_are_truthful_and_ordered(self) -> None:
+        # Upstream uncertainty: blocked baseline.
+        source = baseline(move("2026-01-10", "opening", "open"), blocked=True)
+        decision = plan_request(self._pool_case(options=(full_option(),)), source)
+        self.assertEqual((decision.affordability_status, decision.recommended_method),
+                         (AffordabilityStatus.NOT_AFFORDABLE, RecommendationMethod.NOT_RECOMMENDED))
+        self.assertIsNone(decision.selected_candidate)
+        self.assertEqual(decision.diagnostics, ("fallback_baseline_uncertified",))
+        self.assertEqual(decision.capacity.amount_safe_to_pay, money("0"))
+        # Financially possible only after the deadline.
+        late_source = baseline(move("2026-01-10", "opening", "open"),
+                               move("2026-01-20", "debit", "dip", "-400"),
+                               move("2026-01-30", "credit", "refund", "500"))
+        late_case = planner_case(amount="900", deadline="2026-01-25", options=())
+        decision = plan_request(late_case, late_source)
+        self.assertEqual(decision.diagnostics, ("fallback_possible_after_deadline",))
+        # No accepted method / eligible option.
+        no_method = planner_case(methods=(), options=(full_option(),))
+        decision = plan_request(no_method, baseline(move("2026-01-10", "opening", "open")))
+        self.assertEqual(decision.diagnostics, ("fallback_no_accepted_method",))
+        # Genuine no safe candidate: methods accepted, options eligible, replay breaches.
+        breach_source = baseline(move("2026-01-10", "opening", "open"),
+                                 move("2026-01-20", "debit", "dip", "-1000"))
+        decision = plan_request(self._pool_case(options=(full_option(),)), breach_source)
+        self.assertEqual(decision.diagnostics, ("fallback_no_safe_candidate",))
+        # F-02 regression (a): no accepted methods, yet full payment is financially
+        # possible only after the deadline; the after-deadline scan precedes the
+        # template proxy in the brief precedence.
+        decision = plan_request(planner_case(methods=(), amount="900", deadline="2026-01-25", options=()), late_source)
+        self.assertEqual(decision.diagnostics, ("fallback_possible_after_deadline",))
+        # F-02 regression (b): installments accepted but the option is unsafe while
+        # full payment at D is financially safe; the no-eligible-option class must
+        # outrank the no-safe-candidate class (no after-deadline escape exists here).
+        decision = plan_request(planner_case(methods=(PaymentMethod.INSTALLMENTS,), amount="900", options=()), breach_source)
+        self.assertEqual(decision.diagnostics, ("fallback_no_accepted_method",))
+        # Capacity is the unchanged baseline result in every fallback.
+        self.assertEqual(decision.capacity, compute_baseline_capacity(self._pool_case(options=(full_option(),)), breach_source))
+
+    def test_public_requests_select_exact_paths(self) -> None:
+        repo = DatasetRepository.from_directory(Path(__file__).resolve().parent.parent / "dataset")
+        expected = {
+            "request_06": (AffordabilityStatus.NOT_AFFORDABLE, RecommendationMethod.NOT_RECOMMENDED, None),
+            "request_11": (AffordabilityStatus.AFFORDABLE_LATER, RecommendationMethod.WAIT, d("2025-05-15")),
+            "request_21": (AffordabilityStatus.NOT_AFFORDABLE, RecommendationMethod.NOT_RECOMMENDED, None),
+        }
+        for request_id, (status, method, payment_date) in expected.items():
+            with self.subTest(request_id=request_id):
+                current = repo.load_request_case(request_id)
+                evidence = resolve_case_evidence(current)
+                normalization = normalize_case_events(current, evidence)
+                forecast = build_baseline_forecast(current, evidence, normalization)
+                decision = plan_request(current, forecast)
+                self.assertEqual((decision.affordability_status, decision.recommended_method), (status, method))
+                if payment_date is None:
+                    self.assertIsNone(decision.selected_candidate)
+                else:
+                    self.assertEqual(decision.selected_candidate.payments, (Payment(payment_date, current.request.requested_amount),))
+                    self.assertEqual(decision.selected_candidate.spending_changes, ())
+                self.assertEqual(decision.request_id, request_id)

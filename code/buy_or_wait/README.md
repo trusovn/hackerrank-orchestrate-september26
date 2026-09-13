@@ -19,6 +19,7 @@ lines:
 - `events.py` and `tests/test_events.py`
 - `forecast.py` and `tests/test_forecast.py`
 - `repository.py`
+- `tests/test_planning.py`
 
 Select the owning row below, start from its named public symbol, then narrow the
 source and test together with:
@@ -42,6 +43,7 @@ Read only the matching function and the nearest relevant test class.
 | Payment replay or baseline capacity | `planning.py`: `replay_schedule`, `compute_baseline_capacity`, `SafetyReplay`, `CapacityResult`, `PlanningError` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.SafetyReplayTests` or `python3 -m unittest tests.test_planning.CapacityTests` |
 | No-change candidate enumeration (WP-07A) | `planning.py`: `RecommendationMethod`, `PaymentTemplate`, `PlanCandidate`, `CandidatePool`, `build_no_change_candidate_pool` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.NoChangeCandidateTests` |
 | Spending-change candidate enumeration (WP-07B) | `planning.py`: `SpendingChangeAction`, `FamilyAction`, `enumerate_spending_change_actions`, `build_candidate_pool` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.SpendingChangeCandidateTests` |
+| Ranking and planning decision (WP-07C) | `planning.py`: `PlanningDecision`, `rank_key`, `plan_request` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.RankingAndDecisionTests` |
 
 ## Dependency Fan-Out
 
