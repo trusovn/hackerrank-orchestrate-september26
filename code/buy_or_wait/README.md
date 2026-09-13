@@ -46,6 +46,7 @@ Read only the matching function and the nearest relevant test class.
 | Ranking and planning decision (WP-07C) | `planning.py`: `PlanningDecision`, `rank_key`, `plan_request` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.RankingAndDecisionTests` |
 | Typed output row, codecs, and independent row validation (WP-08A/B) | `output.py`: `OUTPUT_COLUMNS`, `build_output_row`, `explain_decision`, `serialize_output_row`, `parse_output_row`, `validate_output_row`, `OutputValidationError` | `tests/test_output.py` — `python3 -m unittest tests.test_output.OutputRowValidationTests` |
 | Batch coverage and atomic CSV publication (WP-08C) | `output.py`: `OutputContext`, `validate_output_batch`, `write_output_atomic` | `tests/test_output.py` — `python3 -m unittest tests.test_output.OutputBatchAndAtomicWriterTests` |
+| One-case product composition and trace seam (WP-09A) | `pipeline.py`: `DecisionPolicy`, `PredictionTrace`, `predict_case` | `tests/test_pipeline.py` — `python3 -m unittest tests.test_pipeline.SingleCasePipelineTests` |
 
 ## Dependency Fan-Out
 
@@ -54,6 +55,7 @@ This is contract/data flow, not merely Python import direction:
 ```text
 dataset -> repository -> RequestCase -> evidence -> events -> forecast -> planning
                     domain contracts support every deterministic stage above
+               pipeline composes evidence->events->forecast->planning->output
 ai_boundary remains isolated until an explicit composition layer consumes it
 ```
 
@@ -74,6 +76,9 @@ propagate.
 - `forecast.py` consumes validated in-memory inputs and produces a baseline
   forecast only. It performs no file, clock, environment, provider, cache, or
   output access.
+- `pipeline.py` composes the accepted deterministic stages behind one pure,
+  single-case `predict_case`; it reads no files, loads no expected answers,
+  writes no CSV, and catches no stage errors.
 - Evaluation-only code belongs in `code/evaluation/`, outside this package.
 
 ## Maintenance

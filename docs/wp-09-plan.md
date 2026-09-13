@@ -297,7 +297,7 @@ new policy value, or retry a rejected policy with an exception.
 
 # WP-09A — Compose And Validate One Prediction
 
-Status: **READY AFTER FRESH WP-08C ACCEPTANCE**
+Status: **READY AFTER FRESH WP-08C ACCEPTANCE — WP-09A ACCEPTED (2026-09-13)**
 
 ```yaml
 agent_tier: standard
@@ -350,6 +350,67 @@ returns a validated row plus trace.
 | Owning suite | complete new composition seam | `python3 -m unittest tests.test_pipeline` |
 | Compile | imports and syntax | `python3 -m compileall -q code tests` |
 | Broader gate | final A bytes | `python3 -m unittest tests.test_pipeline tests.test_output tests.test_planning tests.test_forecast` then `git diff --check` |
+
+## WP-09A Acceptance Record
+
+Iteration 1 (independent reviewer, 2026-09-13, bytes on `main` at `8a40fc0`):
+
+- Scope: untracked `code/buy_or_wait/pipeline.py` and
+  `tests/test_pipeline.py` plus navigation edits to
+  `code/buy_or_wait/README.md` and `docs/project-map.md`; cleanly separable
+  from user work.
+- Corroborated composition order and purity against the accepted stage seams
+  (`resolve_case_evidence`, `normalize_case_events`,
+  `build_baseline_forecast`, `plan_request`, `build_output_row`,
+  `validate_output_row`); confirmed no `try/except`, file I/O, clock,
+  environment, network, provider, batch, oracle, or usage behavior in the
+  composition.
+- A-AC-01..04 behavior passed: independent reruns of
+  `tests.test_pipeline.SingleCasePipelineTests` (5/5), non-default policy
+  isolation probe (ID changes, evidence/normalization unchanged), canonical
+  distinct policy IDs across single-dimension policies, type-confusion
+  rejection (`None`/`str`/`int`/object), repeat-prediction determinism, and
+  input-case immutability.
+- Finding F-01 [P2]: Required Work item 3 requires default/selected aliases,
+  but `SELECTED_DECISION_POLICY` was absent and `predict_case` defaulted to
+  `DEFAULT_DECISION_POLICY`, leaving WP-09F's "update only
+  `SELECTED_DECISION_POLICY`" rule and the F-AC-05 identity anchor without a
+  seam. Sibling surfaces (`DEFAULT_DECISION_POLICY`, canonical `policy_id`)
+  verified clean.
+- Iteration-1 broad gate (recorded, later superseded as final evidence by the
+  corrected-bytes gate): `python3 -m unittest tests.test_pipeline
+  tests.test_output tests.test_planning tests.test_forecast` — 175 tests OK;
+  `git diff --check` — OK; justified full offline suite
+  `python3 -m unittest discover -s tests -p 'test_*.py'` — 358 tests OK (1
+  pre-existing unrelated skip in `test_repository`); `python3 -m compileall
+  -q code tests` — OK.
+- Verdict: **CHANGES_REQUESTED** (F-01; correction is a one-seam alias with
+  no value or ID change).
+
+Iteration 2 (fresh independent reviewer on corrected bytes, 2026-09-13):
+
+- Correction corroborated: `SELECTED_DECISION_POLICY =
+  DEFAULT_DECISION_POLICY` added; identity probe confirmed the alias
+  (`is`-equal, identical canonical policy ID, no value change), and traces
+  carry matching IDs for both names; the only diff side effect is the added
+  alias line.
+- All ledger rows re-corroborated on corrected bytes: A-AC-01 (6/6 targeted
+  tests), A-AC-02 (non-default ID differs with `tolerant_2_day` present,
+  evidence/normalization equal), A-AC-03 (propagation plus type-confusion
+  rejection), A-AC-04 (determinism and immutability probes), R-01 aliases
+  present, R-02 canonical ID stable.
+- Broad gate owned by the fresh post-correction reviewer and run after
+  targeted evidence was clean: `python3 -m unittest tests.test_pipeline
+  tests.test_output tests.test_planning tests.test_forecast` — 176 tests OK;
+  `python3 -m compileall -q code tests` — OK; `git diff --check` — OK; full
+  `python3 -m unittest discover -s tests -p 'test_*.py'` — 359 tests OK (1
+  pre-existing unrelated skip). The iteration-1 gate was premature relative
+  to F-01; the corrected-bytes gate is final.
+- No open WP-09A findings remain.
+
+Verdict: **ACCEPT** (A-AC-01–A-AC-04 satisfied on the corrected bytes, plus
+the default/selected alias requirement; no open findings). WP-09B may proceed
+through its implementer self-preflight.
 
 ## WP-09A Stops And Handoff
 
