@@ -9,8 +9,11 @@ exist before this suite; the tests reference ``RecommendedPaymentMethod`` and
 
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 import unittest
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -18,18 +21,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "code"))
 
 from buy_or_wait.domain import (  # noqa: E402
-    AffordabilityStatus, CurrencyCode, OutputRow, Payment, PaymentMethod, ProfileRecord, RecommendedPaymentMethod,
-    RequestCase, RequestRecord, RequestScope, RequestType, SpendingChange, SpendingChangeType,
+    AffordabilityStatus, CurrencyCode, Direction, EventRecord, EventStatus, EventType, Flexibility, OutputRow,
+    Payment, PaymentMethod, PaymentOptionRecord, ProfileRecord, RecommendedPaymentMethod, RequestCase,
+    RequestRecord, RequestScope, RequestType, SpendingChange, SpendingChangeType,
 )
 from buy_or_wait.forecast import (  # noqa: E402
     BaselineForecast, Checkpoint, PrimitiveMovement,
 )
 from buy_or_wait.output import (  # noqa: E402
-    OUTPUT_COLUMNS, build_output_row, explain_decision, parse_output_row, serialize_output_row,
+    OUTPUT_COLUMNS, OutputContext, OutputValidationError, build_output_row, explain_decision,
+    parse_output_row, serialize_output_row, validate_output_batch, validate_output_row, write_output_atomic,
 )
 from buy_or_wait.planning import (  # noqa: E402
     CapacityResult, PlanCandidate, PlanningDecision, RecommendationMethod,
-    SafetyReplay,
+    SafetyReplay, plan_request,
 )
 
 
@@ -51,7 +56,8 @@ def case() -> RequestCase:
     )
 
 
-def baseline(*moves: PrimitiveMovement, blocked: bool = False) -> BaselineForecast:
+def baseline(*moves: PrimitiveMovement, blocked: bool = False,
+             request_id: str = "request_P") -> BaselineForecast:
     current_case = case()
     cash, reserved, checkpoints = money("1000"), money("0"), []
     for movement in moves:
@@ -60,7 +66,7 @@ def baseline(*moves: PrimitiveMovement, blocked: bool = False) -> BaselineForeca
         checkpoints.append(Checkpoint(movement.date, movement.phase, cash, reserved, cash - reserved,
                                       cash - reserved - money("100"), None, None, movement.family_id,
                                       movement.source_event_ids, movement.origin, movement.movement_id))
-    return BaselineForecast("request_P", d("2026-01-10"), d("2026-04-10"), money("1000"), money("100"),
+    return BaselineForecast(request_id, d("2026-01-10"), d("2026-04-10"), money("1000"), money("100"),
                             money("0"), (), (), moves, tuple(checkpoints), (), blocked,
                             None if blocked else min(point.headroom for point in checkpoints))
 
@@ -366,6 +372,417 @@ class OutputRowBuildAndCodecTests(unittest.TestCase):
                 self.assertIn(fragment, text)
                 seen.add(text)
         self.assertEqual(len(seen), 4)
+
+
+# --- WP-08B helpers ----------------------------------------------------------
+
+
+def _installment_case() -> RequestCase:
+    from dataclasses import replace
+
+    base = case()
+    option = PaymentOptionRecord("payment_option_02", "request_P", PaymentMethod.INSTALLMENTS,
+                                 money("300"), "300", 3, d("2026-01-15"), 20, money("50"),
+                                 money("900"), "900")
+    return replace(
+        base,
+        profile=ProfileRecord("user_P", CurrencyCode.ZAR, money("1000"), money("100"), frozenset(),
+                              frozenset(), frozenset(), frozenset(),
+                              (PaymentMethod.FULL_PAYMENT, PaymentMethod.INSTALLMENTS), 6),
+        payment_options=(option,),
+    )
+
+
+def _installment_baseline() -> BaselineForecast:
+    return baseline(move("2026-01-10", "opening", "open"),
+                    move("2026-01-12", "credit", "credit", "1000", source_ids=("credit_event",)))
+
+
+def _installment_decision() -> PlanningDecision:
+    capacity = CapacityResult("request_P", money("900"), d("2026-01-10"), ())
+    replay = SafetyReplay("request_P", True, (), money("100"), None, ())
+    candidate = PlanCandidate(
+        RecommendationMethod.INSTALLMENTS,
+        (Payment(d("2026-01-15"), money("300")), Payment(d("2026-02-04"), money("300")),
+         Payment(d("2026-02-24"), money("300"))),
+        (), "payment_option_02", replay, money("0"))
+    return PlanningDecision("request_P", capacity, candidate, AffordabilityStatus.AFFORDABLE_WITH_PLAN,
+                            RecommendationMethod.INSTALLMENTS, ())
+
+
+def _change_case() -> RequestCase:
+    from dataclasses import replace
+
+    base = case()
+    event = EventRecord("dining_event", "user_P", EventType.EXPENSE, "dining desc", "dining",
+                        Direction.DEBIT, money("40"), CurrencyCode.ZAR, d("2025-12-01"), d("2025-12-01"),
+                        EventStatus.SETTLED, None, Flexibility.REDUCIBLE_OR_STOPPABLE, money("20"))
+    return replace(
+        base,
+        request=replace(base.request, requested_amount=money("900"), desired_completion_date=d("2026-03-01"),
+                        allows_partial_payment=False),
+        profile=ProfileRecord("user_P", CurrencyCode.ZAR, money("1000"), money("100"), frozenset(),
+                              frozenset({"rent"}), frozenset({"dining"}), frozenset({"dining"}),
+                              (PaymentMethod.FULL_PAYMENT,), None),
+        events=(event,),
+    )
+
+
+def _change_baseline() -> BaselineForecast:
+    from buy_or_wait.forecast import PrimitiveMovement
+
+    def recurring(day: str, ident: str, family: str, home: str) -> PrimitiveMovement:
+        return move(day, "debit", ident, f"-{home}", origin="fixed_recurrence", family=family,
+                    source_amount=home, source_currency=CurrencyCode.ZAR, source_ids=("dining_event",))
+
+    return baseline(move("2026-01-10", "opening", "open"),
+                    recurring("2026-01-15", "d1", "dining_series", "40"),
+                    recurring("2026-02-15", "d2", "dining_series", "40"))
+
+
+class OutputRowValidationTests(unittest.TestCase):
+    """WP-08B fail-first: reject every row that disagrees with case, capacity,
+    decision, eligibility, option/action contract, or a fresh replay."""
+
+    def _planned(self, scenario: str) -> tuple[RequestCase, BaselineForecast, PlanningDecision, OutputRow]:
+        """Build every valid row through the public planner, never by hand."""
+        if scenario == "full":
+            current, source = case(), baseline(move("2026-01-10", "opening", "open"))
+        elif scenario == "wait":
+            current = case()
+            source = baseline(move("2026-01-10", "opening", "open"),
+                              move("2026-01-10", "debit", "bd", "-900", source_ids=("bd_event",)),
+                              move("2026-01-20", "credit", "credit", "950", source_ids=("cr_event",)))
+        elif scenario == "partial":
+            original = case()
+            current = replace(original, request=replace(original.request, requested_amount=money("550")),
+                              profile=replace(original.profile,
+                                              payment_methods_user_will_consider=(PaymentMethod.PARTIAL_PAYMENT,)))
+            source = baseline(move("2026-01-10", "opening", "open"),
+                              move("2026-01-20", "debit", "dip", "-400", source_ids=("dip_event",)),
+                              move("2026-01-30", "credit", "refund", "500", source_ids=("refund_event",)))
+        elif scenario == "installments":
+            original = _installment_case()
+            current = replace(original, profile=replace(
+                original.profile, payment_methods_user_will_consider=(PaymentMethod.INSTALLMENTS,)))
+            source = _installment_baseline()
+        elif scenario == "changed":
+            current, source = _change_case(), _change_baseline()
+        elif scenario == "not_recommended":
+            current = case()
+            source = baseline(move("2026-01-10", "opening", "open"),
+                              move("2026-01-10", "debit", "bd", "-950", source_ids=("bd_event",)))
+        else:
+            raise AssertionError(f"unknown scenario: {scenario}")
+        planned = plan_request(current, source)
+        return current, source, planned, build_output_row(current, source, planned)
+
+    def _rejects(self, row: OutputRow, current: RequestCase, source: BaselineForecast,
+                 planned: PlanningDecision, reason: str) -> None:
+        with self.assertRaises(OutputValidationError) as caught:
+            validate_output_row(row, current, source, planned)
+        self.assertEqual(caught.exception.reason_code, reason)
+
+    def test_accepted_rows_validate(self) -> None:
+        for scenario in ("full", "wait", "partial", "installments", "changed", "not_recommended"):
+            with self.subTest(scenario=scenario):
+                current, source, planned, row = self._planned(scenario)
+                validate_output_row(row, current, source, planned)
+
+    # --- B-AC-01: ID, amount, enums, capacity exact ------------------------
+
+    def test_request_id_mismatch_rejects(self) -> None:
+        current, source, planned, row = self._planned("full")
+        self._rejects(replace(row, request_id="other"), current, source, planned, "request_id_mismatch")
+
+    def test_safe_amount_mismatch_rejects(self) -> None:
+        current, source, planned, row = self._planned("full")
+        self._rejects(replace(row, amount_safe_to_pay=money("500")), current, source, planned,
+                      "safe_amount_mismatch")
+
+    def test_earliest_date_mismatch_rejects(self) -> None:
+        current, source, planned, row = self._planned("full")
+        self._rejects(replace(row, earliest_date_for_full_payment=d("2026-01-15")), current, source, planned,
+                      "earliest_date_mismatch")
+
+    def test_amount_exceeding_requested_rejects(self) -> None:
+        current, source, planned, row = self._planned("full")
+        self._rejects(replace(row, amount_safe_to_pay=money("950")), current, source, planned,
+                      "amount_exceeds_requested")
+
+    # --- B-AC-03 / FR-08-04: plan-by-method exactness ----------------------
+
+    def test_full_payment_plan_rejects_wrong_date_and_amount(self) -> None:
+        current, source, planned, row = self._planned("full")
+        for plan in ((Payment(d("2026-01-11"), money("900")),),
+                     (Payment(d("2026-01-10"), money("800")),)):
+            with self.subTest(plan=plan):
+                self._rejects(replace(row, payment_plan=plan), current, source, planned, "full_plan_mismatch")
+
+    def test_wait_and_partial_plan_shapes_reject(self) -> None:
+        current, source, planned, row = self._planned("wait")
+        self._rejects(replace(row, payment_plan=(Payment(d("2026-01-10"), money("900")),)),
+                      current, source, planned, "wait_plan_mismatch")
+        current, source, planned, row = self._planned("partial")
+        self._rejects(replace(row, payment_plan=(row.payment_plan[0], Payment(d("2026-02-01"), money("50")))),
+                      current, source, planned, "partial_second_mismatch")
+
+    def test_full_wait_and_partial_preferences_reject(self) -> None:
+        for scenario, expected in (("full", "full_preference_excluded"),
+                                   ("wait", "wait_preference_excluded"),
+                                   ("partial", "partial_preference_excluded")):
+            with self.subTest(scenario=scenario):
+                current, source, planned, row = self._planned(scenario)
+                excluded = replace(current, profile=replace(
+                    current.profile, payment_methods_user_will_consider=()))
+                self._rejects(row, excluded, source, planned, expected)
+
+    def test_installment_plan_and_cap_reject(self) -> None:
+        current, source, planned, row = self._planned("installments")
+        shifted = tuple(Payment(payment.payment_date.replace(day=payment.payment_date.day + 1), payment.amount)
+                        for payment in row.payment_plan)
+        self._rejects(replace(row, payment_plan=shifted), current, source, planned, "installment_plan_mismatch")
+        capped = replace(current, profile=replace(current.profile, max_installment_months=2))
+        self._rejects(row, capped, source, planned, "installment_cap_exceeded")
+
+    def test_installment_preference_rejects(self) -> None:
+        current, source, planned, row = self._planned("installments")
+        excluded = replace(current, profile=replace(
+            current.profile, payment_methods_user_will_consider=()))
+        self._rejects(row, excluded, source, planned, "installment_preference_excluded")
+
+    # --- B-AC-04 / FR-08-05: actions ---------------------------------------
+
+    def test_action_catalogue_and_count_reject(self) -> None:
+        current, source, planned, row = self._planned("changed")
+        self._rejects(replace(row, spending_changes_needed=(SpendingChange(SpendingChangeType.STOP, "rent_event"),)),
+                      current, source, planned, "change_not_eligible")
+        self._rejects(replace(row, spending_changes_needed=(
+            SpendingChange(SpendingChangeType.STOP, "dining_event"),) * 4),
+                      current, source, planned, "too_many_changes")
+
+    # --- B-AC-05 / FR-08-06: fresh replay -----------------------------------
+
+    def test_replay_catches_first_and_later_breaches(self) -> None:
+        current, source, planned, row = self._planned("wait")
+        self._rejects(replace(row, payment_plan=(Payment(d("2026-01-11"), money("900")),)),
+                      current, source, planned, "replay_minimum_balance_breach")
+        current, source, planned, row = self._planned("changed")
+        self._rejects(replace(row, spending_changes_needed=()), current, source, planned,
+                      "replay_minimum_balance_breach")
+
+    # --- B-AC-02 / FR-08-03: status/method table ---------------------------
+
+    def test_status_table_rejects_changed_full_as_now(self) -> None:
+        current, source, planned, row = self._planned("changed")
+        self._rejects(replace(row, affordability_status=AffordabilityStatus.AFFORDABLE_NOW),
+                      current, source, planned, "affordable_now_with_changes")
+
+    def test_partial_wrong_status_rejects(self) -> None:
+        current, source, planned, row = self._planned("partial")
+        self._rejects(replace(row, affordability_status=AffordabilityStatus.AFFORDABLE_NOW),
+                      current, source, planned, "partial_method_wrong_status")
+
+    # --- B-AC-06: explanation and dependency agreement ---------------------
+
+    def test_explanation_rejects_empty_and_swapped(self) -> None:
+        current, source, planned, row = self._planned("full")
+        self._rejects(replace(row, decision_explanation=""), current, source, planned, "explanation_mismatch")
+        _, _, _, other = self._planned("wait")
+        self._rejects(replace(row, decision_explanation=other.decision_explanation), current, source, planned,
+                      "explanation_mismatch")
+
+    def test_incoherent_decision_rejects_before_explanation_rendering(self) -> None:
+        current, source, planned, row = self._planned("full")
+        # Coherence is an input-safety check, not decision agreement. It runs
+        # before rendering so malformed candidate/decision pairs cannot leak.
+        self._rejects(row, current, source,
+                      replace(planned, recommended_method=RecommendationMethod.WAIT), "invalid_decision")
+
+    def test_incoherent_decision_rejects_before_rendering(self) -> None:
+        current, source, planned, row = self._planned("wait")
+        incoherent = replace(planned, recommended_method=RecommendationMethod.PARTIAL_PAYMENT)
+        self._rejects(row, current, source, incoherent, "invalid_decision")
+
+    def test_baseline_case_mismatch_rejects(self) -> None:
+        current, source, planned, row = self._planned("full")
+        self._rejects(row, current, replace(source, request_id="other_request"), planned, "invalid_baseline")
+
+
+class OutputBatchAndAtomicWriterTests(unittest.TestCase):
+    """WP-08C fail-first: exact batch coverage and all-or-nothing publication.
+
+    Uses a ``TemporaryDirectory`` with real sibling temp files and a preserved
+    sentinel destination. Never touches root ``output.csv``.
+    """
+
+    def _evaluation_contexts(self, count: int = 2) -> list[OutputContext]:
+        contexts: list[OutputContext] = []
+        for index in range(count):
+            request_id = f"request_{index}"
+            current = replace(case(), request=replace(
+                case().request, request_id=request_id, scope=RequestScope.EVALUATION))
+            source = baseline(move("2026-01-10", "opening", "open"), request_id=request_id)
+            planned = plan_request(current, source)
+            contexts.append(OutputContext(current, source, planned))
+        return contexts
+
+    def _batch(self, contexts: list[OutputContext]) -> list[OutputRow]:
+        return [build_output_row(c.case, c.baseline, c.decision) for c in contexts]
+
+    def _assert_preserved(self, path: Path, sentinel: bytes) -> None:
+        self.assertEqual(path.read_bytes(), sentinel)
+
+    # --- C-AC-01: exact batch coverage -------------------------------------
+
+    def test_exact_batch_validates(self) -> None:
+        contexts = self._evaluation_contexts(3)
+        rows = self._batch(contexts)
+        validate_output_batch(rows, contexts)
+
+    def test_missing_row_rejects(self) -> None:
+        contexts = self._evaluation_contexts(2)
+        rows = self._batch(contexts)
+        self.assertRaises(OutputValidationError, validate_output_batch, rows[:1], contexts)
+        with self.assertRaises(OutputValidationError) as caught:
+            validate_output_batch(rows[:1], contexts)
+        self.assertEqual(caught.exception.reason_code, "missing_request")
+
+    def test_extra_row_rejects(self) -> None:
+        contexts = self._evaluation_contexts(1)
+        rows = self._batch(contexts)
+        extra = replace(case(), request=replace(
+            case().request, request_id="request_extra", scope=RequestScope.EVALUATION))
+        source = baseline(move("2026-01-10", "opening", "open"), request_id="request_extra")
+        planned = plan_request(extra, source)
+        row = build_output_row(extra, source, planned)
+        with self.assertRaises(OutputValidationError) as caught:
+            validate_output_batch(rows + [row], contexts)
+        self.assertEqual(caught.exception.reason_code, "extra_request")
+
+    def test_duplicate_row_rejects(self) -> None:
+        contexts = self._evaluation_contexts(1)
+        rows = self._batch(contexts)
+        with self.assertRaises(OutputValidationError) as caught:
+            validate_output_batch(rows + rows, contexts)
+        self.assertEqual(caught.exception.reason_code, "duplicate_request")
+
+    def test_out_of_order_rejects(self) -> None:
+        contexts = self._evaluation_contexts(2)
+        rows = self._batch(contexts)
+        swapped = [rows[1], rows[0]]
+        with self.assertRaises(OutputValidationError) as caught:
+            validate_output_batch(swapped, contexts)
+        self.assertEqual(caught.exception.reason_code, "out_of_order")
+
+    def test_sample_scope_rejects(self) -> None:
+        current = replace(case(), request=replace(case().request, scope=RequestScope.SAMPLE))
+        source = baseline(move("2026-01-10", "opening", "open"))
+        planned = plan_request(current, source)
+        context = OutputContext(current, source, planned)
+        row = build_output_row(current, source, planned)
+        with self.assertRaises(OutputValidationError) as caught:
+            validate_output_batch([row], [context])
+        self.assertEqual(caught.exception.reason_code, "sample_scope")
+
+    def test_context_case_mismatch_rejects(self) -> None:
+        contexts = self._evaluation_contexts(2)
+        rows = self._batch(contexts)
+        mismatched = OutputContext(contexts[1].case, contexts[0].baseline, contexts[0].decision)
+        with self.assertRaises(OutputValidationError) as caught:
+            validate_output_batch(rows, [contexts[0], mismatched])
+        self.assertEqual(caught.exception.reason_code, "invalid_baseline")
+
+    # --- C-AC-02/03/04/05: atomic publication -------------------------------
+
+    def test_new_destination_publishes_exact_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "out.csv"
+            contexts = self._evaluation_contexts(2)
+            rows = self._batch(contexts)
+            write_output_atomic(path, rows, contexts)
+            self.assertTrue(path.exists())
+            reparsed = parse_output_row({k: v for k, v in serialize_output_row(rows[0]).items()})
+            self.assertEqual(reparsed, rows[0])
+            with path.open("r", newline="", encoding="utf-8") as handle:
+                import csv
+                reader = csv.DictReader(handle)
+                self.assertEqual(reader.fieldnames, list(OUTPUT_COLUMNS))
+                lines = list(reader)
+            self.assertEqual(len(lines), 2)
+            self.assertEqual([line["request_id"] for line in lines], [r.request_id for r in rows])
+
+    def test_existing_destination_replaced_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "out.csv"
+            sentinel = b"old bytes\n"
+            path.write_bytes(sentinel)
+            contexts = self._evaluation_contexts(1)
+            rows = self._batch(contexts)
+            write_output_atomic(path, rows, contexts)
+            self.assertNotEqual(path.read_bytes(), sentinel)
+            self.assertEqual(len(path.read_text(encoding="utf-8").strip().splitlines()), 2)
+
+    def test_replaced_file_round_trips_explanation_quoting(self) -> None:
+        from buy_or_wait.output import _read_csv_batch, _write_csv_sibling
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp) / "sibling.csv"
+            contexts = self._evaluation_contexts(1)
+            row = self._batch(contexts)[0]
+            tricky = replace(row, decision_explanation="a, \"quoted\"\nline | 'tick'")
+            _write_csv_sibling(temp_path, [tricky])
+            reparsed, ids = _read_csv_batch(temp_path)
+            self.assertEqual(ids, [tricky.request_id])
+            self.assertEqual(reparsed[0].decision_explanation, tricky.decision_explanation)
+            self.assertEqual(reparsed[0], tricky)
+            self.assertEqual(serialize_output_row(reparsed[0]), serialize_output_row(tricky))
+
+    def test_write_failure_preserves_old_destination_and_removes_temp(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "out.csv"
+            sentinel = b"sentinel\n"
+            path.write_bytes(sentinel)
+            contexts = self._evaluation_contexts(1)
+            rows = self._batch(contexts)
+            with self.assertRaises(Exception):
+                write_output_atomic(path, rows[:0], contexts)
+            self._assert_preserved(path, sentinel)
+            self.assertEqual(list(Path(temp).glob(".output-*.csv")), [])
+
+    def test_replace_failure_preserves_old_destination_and_removes_temp(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "out.csv"
+            sentinel = b"sentinel\n"
+            path.write_bytes(sentinel)
+            contexts = self._evaluation_contexts(1)
+            rows = self._batch(contexts)
+
+            import buy_or_wait.output as outmod
+            original = outmod.os.replace
+
+            def fail_replace(src, dst):
+                raise OSError("simulated replace failure")
+
+            outmod.os.replace = fail_replace
+            try:
+                with self.assertRaises(OSError):
+                    write_output_atomic(path, rows, contexts)
+            finally:
+                outmod.os.replace = original
+            self._assert_preserved(path, sentinel)
+            self.assertEqual(list(Path(temp).glob(".output-*.csv")), [])
+
+    def test_failed_validation_never_touches_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "out.csv"
+            sentinel = b"sentinel\n"
+            path.write_bytes(sentinel)
+            contexts = self._evaluation_contexts(2)
+            rows = self._batch(contexts)
+            with self.assertRaises(OutputValidationError):
+                write_output_atomic(path, rows[:1], contexts)
+            self._assert_preserved(path, sentinel)
+            self.assertEqual(list(Path(temp).glob(".output-*.csv")), [])
 
 
 if __name__ == "__main__":

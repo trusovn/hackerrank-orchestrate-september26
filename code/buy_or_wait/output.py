@@ -9,18 +9,22 @@ pipeline wiring here; WP-08B validates and WP-08C writes the CSV.
 
 from __future__ import annotations
 
+import csv
+import os
+import tempfile
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from buy_or_wait.domain import (
-    AffordabilityStatus, OutputRow, Payment, RecommendedPaymentMethod, RequestCase, SpendingChange,
-    SpendingChangeType,
+    AffordabilityStatus, OutputRow, Payment, PaymentMethod, PaymentOptionRecord, RecommendedPaymentMethod,
+    RequestCase, RequestScope, SpendingChange, SpendingChangeType,
 )
 from buy_or_wait.forecast import BaselineForecast
 from buy_or_wait.planning import (
-    PlanningDecision, RecommendationMethod,
+    CapacityResult, PlanningDecision, RecommendationMethod, compute_baseline_capacity,
+    enumerate_spending_change_actions, replay_schedule,
 )
 
 
@@ -369,3 +373,388 @@ def _output_method(method: RecommendationMethod) -> RecommendedPaymentMethod:
     if method is RecommendationMethod.WAIT:
         return RecommendedPaymentMethod.WAIT
     return RecommendedPaymentMethod.NOT_RECOMMENDED
+
+
+# --- WP-08B independent single-row validation --------------------------------
+
+
+def _recompute_capacity(case: RequestCase, baseline: BaselineForecast) -> CapacityResult:
+    return compute_baseline_capacity(case, baseline)
+
+
+def validate_output_row(row: OutputRow, case: RequestCase, baseline: BaselineForecast,
+                        decision: PlanningDecision) -> None:
+    """Reject any row that disagrees with case, capacity, decision, or fresh replay.
+
+    Deterministic, offline, side-effect free. Independent checks run before
+    decision agreement so jointly corrupt row/decision values cannot bypass
+    capacity, option/action, or replay rules.
+    """
+    if not isinstance(row, OutputRow):
+        raise OutputValidationError("invalid_row")
+    if not isinstance(case, RequestCase):
+        raise OutputValidationError("invalid_case")
+    if not isinstance(baseline, BaselineForecast) or baseline.request_id != case.request.request_id:
+        raise OutputValidationError("invalid_baseline")
+    if not isinstance(decision, PlanningDecision) or decision.request_id != case.request.request_id:
+        raise OutputValidationError("invalid_decision")
+    _validate_decision_coherence(decision)
+    if row.request_id != case.request.request_id:
+        raise OutputValidationError("request_id_mismatch", field="request_id")
+    if not _is_money(row.amount_safe_to_pay) or row.amount_safe_to_pay < 0:
+        raise OutputValidationError("amount_out_of_range", field="amount_safe_to_pay")
+    if row.amount_safe_to_pay > case.request.requested_amount:
+        raise OutputValidationError("amount_exceeds_requested", field="amount_safe_to_pay")
+
+    capacity = _recompute_capacity(case, baseline)
+    if row.amount_safe_to_pay != capacity.amount_safe_to_pay:
+        raise OutputValidationError("safe_amount_mismatch", field="amount_safe_to_pay")
+    if row.earliest_date_for_full_payment != capacity.earliest_date_for_full_payment:
+        raise OutputValidationError("earliest_date_mismatch", field="earliest_date_for_full_payment")
+
+    _validate_plan_by_method(row, case, baseline, decision)
+    _validate_changes(row, case, baseline)
+    _validate_replay(row, case, baseline)
+    _validate_status_method_table(row, decision)
+
+    expected_explanation = explain_decision(case, baseline, decision)
+    if row.decision_explanation != expected_explanation:
+        raise OutputValidationError("explanation_mismatch", field="decision_explanation")
+
+    if row.recommended_payment_method != _output_method(decision.recommended_method):
+        raise OutputValidationError("method_mismatch", field="recommended_payment_method")
+    if row.affordability_status != decision.affordability_status:
+        raise OutputValidationError("status_mismatch", field="affordability_status")
+
+
+def _validate_plan_by_method(row: OutputRow, case: RequestCase, baseline: BaselineForecast,
+                             decision: PlanningDecision) -> None:
+    method = row.recommended_payment_method
+    plan = row.payment_plan
+    requested = case.request.requested_amount
+    accepted = {candidate.value for candidate in case.profile.payment_methods_user_will_consider}
+    if method is RecommendedPaymentMethod.NOT_RECOMMENDED:
+        if plan or row.spending_changes_needed:
+            raise OutputValidationError("not_recommended_has_plan_or_changes", field="payment_plan")
+        return
+    if not plan:
+        raise OutputValidationError("missing_plan", field="payment_plan")
+    if method is RecommendedPaymentMethod.FULL_PAYMENT:
+        if PaymentMethod.FULL_PAYMENT.value not in accepted:
+            raise OutputValidationError("full_preference_excluded", field="recommended_payment_method")
+        if len(plan) != 1 or plan[0].payment_date != case.request.request_date \
+                or plan[0].amount != requested:
+            raise OutputValidationError("full_plan_mismatch", field="payment_plan")
+        return
+    if method is RecommendedPaymentMethod.WAIT:
+        if PaymentMethod.FULL_PAYMENT.value not in accepted:
+            raise OutputValidationError("wait_preference_excluded", field="recommended_payment_method")
+        if len(plan) != 1 or plan[0].payment_date <= case.request.request_date \
+                or plan[0].amount != requested:
+            raise OutputValidationError("wait_plan_mismatch", field="payment_plan")
+        deadline = case.request.desired_completion_date
+        if plan[0].payment_date > deadline:
+            raise OutputValidationError("wait_after_deadline", field="payment_plan")
+        return
+    if method is RecommendedPaymentMethod.PARTIAL_PAYMENT:
+        if PaymentMethod.PARTIAL_PAYMENT.value not in accepted:
+            raise OutputValidationError("partial_preference_excluded", field="recommended_payment_method")
+        if not case.request.allows_partial_payment:
+            raise OutputValidationError("partial_not_allowed", field="payment_plan")
+        if len(plan) != 2:
+            raise OutputValidationError("partial_plan_mismatch", field="payment_plan")
+        first, second = plan
+        safe = row.amount_safe_to_pay
+        if not (0 < safe < requested):
+            raise OutputValidationError("partial_safe_not_in_range", field="amount_safe_to_pay")
+        if first.payment_date != case.request.request_date or first.amount != safe:
+            raise OutputValidationError("partial_first_mismatch", field="payment_plan")
+        earliest = row.earliest_date_for_full_payment
+        if earliest is None or second.payment_date != earliest or second.amount != requested - safe:
+            raise OutputValidationError("partial_second_mismatch", field="payment_plan")
+        if second.payment_date > case.request.desired_completion_date:
+            raise OutputValidationError("partial_after_deadline", field="payment_plan")
+        return
+    if method is RecommendedPaymentMethod.INSTALLMENTS:
+        _validate_installments(row, case, baseline, decision)
+        return
+    raise OutputValidationError("unknown_method", field="recommended_payment_method")
+
+
+def _validate_installments(row: OutputRow, case: RequestCase, baseline: BaselineForecast,
+                           decision: PlanningDecision) -> None:
+    if PaymentMethod.INSTALLMENTS.value not in {
+            candidate.value for candidate in case.profile.payment_methods_user_will_consider}:
+        raise OutputValidationError("installment_preference_excluded", field="recommended_payment_method")
+    option = _decision_installment_option(case, decision)
+    plan = row.payment_plan
+    expected = _expected_installment_payments(option, case)
+    if plan != expected:
+        raise OutputValidationError("installment_plan_mismatch", field="payment_plan")
+    count = len(plan)
+    if count <= 0 or option.number_of_payments != count:
+        raise OutputValidationError("installment_count_mismatch", field="payment_plan")
+    if count > (case.profile.max_installment_months or 0):
+        raise OutputValidationError("installment_cap_exceeded", field="payment_plan")
+    if plan[-1].payment_date > case.request.desired_completion_date:
+        raise OutputValidationError("installment_after_deadline", field="payment_plan")
+    if plan[-1].payment_date > baseline.horizon_end:
+        raise OutputValidationError("installment_after_horizon", field="payment_plan")
+    total = sum((payment.amount for payment in plan), Decimal("0"))
+    if total != option.total_payable_amount:
+        raise OutputValidationError("installment_total_mismatch", field="payment_plan")
+    if option.financing_fee < 0:
+        raise OutputValidationError("installment_negative_fee", field="payment_plan")
+
+
+def _decision_installment_option(case: RequestCase, decision: PlanningDecision) -> PaymentOptionRecord:
+    if decision.selected_candidate is None:
+        raise OutputValidationError("installment_no_candidate", field="payment_plan")
+    option_id = decision.selected_candidate.payment_option_id
+    if option_id is None:
+        raise OutputValidationError("installment_no_option_id", field="payment_plan")
+    option = next((candidate for candidate in case.payment_options
+                   if candidate.payment_option_id == option_id), None)
+    if option is None or option.payment_method is not PaymentMethod.INSTALLMENTS:
+        raise OutputValidationError("installment_option_missing", field="payment_plan")
+    return option
+
+
+def _validate_decision_coherence(decision: PlanningDecision) -> None:
+    """Reject a tampered decision before its renderer indexes candidate payments."""
+    candidate = decision.selected_candidate
+    if decision.recommended_method is RecommendationMethod.NOT_RECOMMENDED:
+        if candidate is not None:
+            raise OutputValidationError("invalid_decision", field="decision")
+        return
+    if candidate is None or candidate.recommendation_method is not decision.recommended_method:
+        raise OutputValidationError("invalid_decision", field="decision")
+    payments = candidate.payments
+    if decision.recommended_method in {RecommendationMethod.FULL_PAYMENT, RecommendationMethod.WAIT}:
+        valid_count = len(payments) == 1
+    elif decision.recommended_method is RecommendationMethod.PARTIAL_PAYMENT:
+        valid_count = len(payments) == 2
+    else:
+        valid_count = len(payments) > 0
+    if not valid_count:
+        raise OutputValidationError("invalid_decision", field="decision")
+
+
+def _expected_installment_payments(option: PaymentOptionRecord | None, case: RequestCase) -> tuple[Payment, ...]:
+    if option is None:
+        raise OutputValidationError("installment_option_invalid", field="payment_plan")
+    if option.request_id != case.request.request_id or option.payment_frequency_days is None \
+            or option.payment_frequency_days <= 0 or option.number_of_payments <= 0:
+        raise OutputValidationError("installment_option_invalid", field="payment_plan")
+    payments: list[Payment] = []
+    day = option.first_payment_date
+    for _ in range(option.number_of_payments):
+        payments.append(Payment(day, option.payment_amount))
+        day += timedelta(days=option.payment_frequency_days)
+    expected_total = option.payment_amount * option.number_of_payments
+    if expected_total != option.total_payable_amount or option.financing_fee < 0:
+        raise OutputValidationError("installment_option_invalid", field="payment_plan")
+    return tuple(payments)
+
+
+def _validate_changes(row: OutputRow, case: RequestCase, baseline: BaselineForecast) -> None:
+    changes = row.spending_changes_needed
+    if len(changes) > 3:
+        raise OutputValidationError("too_many_changes", field="spending_changes_needed")
+    family_actions = enumerate_spending_change_actions(case, baseline)
+    allowed: dict[str, set[tuple[SpendingChangeType, Decimal | None]]] = {}
+    for family in family_actions:
+        for action in family.actions:
+            allowed.setdefault(action.event_id, set()).add((action.change_type, action.new_amount))
+    for index, change in enumerate(changes):
+        if not isinstance(change, SpendingChange) or not isinstance(change.event_id, str) or not change.event_id:
+            raise OutputValidationError("change_invalid", field="spending_changes_needed")
+        candidates = allowed.get(change.event_id)
+        if candidates is None:
+            raise OutputValidationError("change_not_eligible", field="spending_changes_needed")
+        if change.change_type is SpendingChangeType.STOP:
+            if change.new_amount is not None or (SpendingChangeType.STOP, None) not in candidates:
+                raise OutputValidationError("change_type_mismatch", field="spending_changes_needed")
+        elif change.change_type is SpendingChangeType.REDUCE_TO:
+            if not _is_money(change.new_amount) or change.new_amount < 0:
+                raise OutputValidationError("change_amount_invalid", field="spending_changes_needed")
+            if (SpendingChangeType.REDUCE_TO, change.new_amount) not in candidates:
+                raise OutputValidationError("change_type_mismatch", field="spending_changes_needed")
+        else:
+            raise OutputValidationError("change_type_invalid", field="spending_changes_needed")
+    families = {change.event_id: True for change in changes}
+    if len(families) != len(changes):
+        raise OutputValidationError("change_duplicate", field="spending_changes_needed")
+
+
+def _validate_replay(row: OutputRow, case: RequestCase, baseline: BaselineForecast) -> None:
+    if row.recommended_payment_method is RecommendedPaymentMethod.NOT_RECOMMENDED:
+        return
+    replay = replay_schedule(case, baseline, row.payment_plan, row.spending_changes_needed)
+    if not replay.safe:
+        reason = replay.first_failure.reason_code if replay.first_failure is not None else "unsafe"
+        raise OutputValidationError(f"replay_{reason}", field="payment_plan")
+
+
+def _validate_status_method_table(row: OutputRow, decision: PlanningDecision) -> None:
+    status, method = row.affordability_status, row.recommended_payment_method
+    if method is RecommendedPaymentMethod.FULL_PAYMENT:
+        if status is AffordabilityStatus.AFFORDABLE_NOW:
+            if row.spending_changes_needed:
+                raise OutputValidationError("affordable_now_with_changes", field="affordability_status")
+        elif status is AffordabilityStatus.AFFORDABLE_WITH_PLAN:
+            if not row.spending_changes_needed:
+                raise OutputValidationError("with_plan_unchanged_full", field="affordability_status")
+        else:
+            raise OutputValidationError("full_method_wrong_status", field="affordability_status")
+    elif method is RecommendedPaymentMethod.WAIT:
+        if status is AffordabilityStatus.AFFORDABLE_LATER:
+            if row.spending_changes_needed:
+                raise OutputValidationError("affordable_later_with_changes", field="affordability_status")
+        elif status is AffordabilityStatus.AFFORDABLE_WITH_PLAN:
+            if not row.spending_changes_needed:
+                raise OutputValidationError("with_plan_unchanged_wait", field="affordability_status")
+        else:
+            raise OutputValidationError("wait_method_wrong_status", field="affordability_status")
+    elif method is RecommendedPaymentMethod.PARTIAL_PAYMENT:
+        if status is not AffordabilityStatus.AFFORDABLE_WITH_PLAN:
+            raise OutputValidationError("partial_method_wrong_status", field="affordability_status")
+    elif method is RecommendedPaymentMethod.INSTALLMENTS:
+        if status is not AffordabilityStatus.AFFORDABLE_WITH_PLAN:
+            raise OutputValidationError("installments_method_wrong_status", field="affordability_status")
+    elif method is RecommendedPaymentMethod.NOT_RECOMMENDED:
+        if status is not AffordabilityStatus.NOT_AFFORDABLE:
+            raise OutputValidationError("not_recommended_wrong_status", field="affordability_status")
+    else:
+        raise OutputValidationError("unknown_method", field="recommended_payment_method")
+    # Decision agreement is checked after the independent rules above (see call site).
+    _ = decision
+
+
+# --- WP-08C batch and atomic writer -----------------------------------------
+
+
+@dataclass(frozen=True)
+class OutputContext:
+    """One ordered evaluation request with its validated context triple."""
+
+    case: RequestCase
+    baseline: BaselineForecast
+    decision: PlanningDecision
+
+
+def _context_request_ids(contexts: Sequence[OutputContext]) -> list[str]:
+    ids: list[str] = []
+    for context in contexts:
+        if not isinstance(context, OutputContext):
+            raise OutputValidationError("invalid_context")
+        if not isinstance(context.case, RequestCase):
+            raise OutputValidationError("invalid_case")
+        ids.append(context.case.request.request_id)
+    return ids
+
+
+def validate_output_batch(rows: Sequence[OutputRow],
+                         contexts_in_request_order: Sequence[OutputContext]) -> None:
+    """Reject any ordered batch that does not cover exactly the evaluation requests.
+
+    Materialize the expected request order from contexts once, require every
+    expected evaluation ID and no missing/duplicate/extra/out-of-order/sample
+    row, then run the WP-08B single-row validator on each row with its context.
+    """
+    if not isinstance(rows, Sequence) or not isinstance(contexts_in_request_order, Sequence):
+        raise OutputValidationError("invalid_batch")
+    expected_ids = _context_request_ids(contexts_in_request_order)
+    if len(expected_ids) != len(set(expected_ids)):
+        raise OutputValidationError("duplicate_context")
+    seen: set[str] = set()
+    row_ids: list[str] = []
+    for row in rows:
+        if not isinstance(row, OutputRow):
+            raise OutputValidationError("invalid_row")
+        if row.request_id in seen:
+            raise OutputValidationError("duplicate_request", request_id=row.request_id)
+        seen.add(row.request_id)
+        row_ids.append(row.request_id)
+    expected_set = set(expected_ids)
+    for rid in row_ids:
+        if rid not in expected_set:
+            raise OutputValidationError("extra_request", request_id=rid)
+    for rid in expected_ids:
+        if rid not in seen:
+            raise OutputValidationError("missing_request", request_id=rid)
+    if row_ids != expected_ids:
+        raise OutputValidationError("out_of_order")
+    rows_by_id = {row.request_id: row for row in rows}
+    for context in contexts_in_request_order:
+        request_id = context.case.request.request_id
+        if context.case.request.scope is not RequestScope.EVALUATION:
+            raise OutputValidationError("sample_scope", request_id=request_id)
+        validate_output_row(rows_by_id[request_id], context.case, context.baseline, context.decision)
+
+
+def _write_csv_sibling(temp_path, rows: Sequence[OutputRow]) -> None:
+    with open(temp_path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(OUTPUT_COLUMNS), extrasaction="raise",
+                                 quoting=csv.QUOTE_MINIMAL)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(serialize_output_row(row))
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _read_csv_batch(temp_path) -> tuple[list[OutputRow], list[str]]:
+    with open(temp_path, "r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != list(OUTPUT_COLUMNS):
+            raise OutputValidationError("unexpected_header")
+        parsed: list[OutputRow] = []
+        ids: list[str] = []
+        for raw in reader:
+            if set(raw) != set(OUTPUT_COLUMNS):
+                raise OutputValidationError("unexpected_cells")
+            row = parse_output_row(raw)
+            parsed.append(row)
+            ids.append(row.request_id)
+    return parsed, ids
+
+
+def _reparse_equals(typed: OutputRow, parsed: OutputRow) -> bool:
+    return typed == parsed and serialize_output_row(typed) == serialize_output_row(parsed)
+
+
+def write_output_atomic(path: str | os.PathLike, rows: Sequence[OutputRow],
+                        contexts_in_request_order: Sequence[OutputContext]) -> None:
+    """Publish one validated row per evaluation request with one ``os.replace``.
+
+    Validate the ordered batch first, then write a sibling temp in the
+    destination parent, flush and fsync it, reopen and reparse it, revalidate
+    the reparsed batch, require typed equality, and replace the destination
+    exactly once. Any failure before replacement preserves the old destination
+    byte-for-byte and removes the temp sibling. The destination is never opened
+    for a truncating write.
+    """
+    validate_output_batch(rows, contexts_in_request_order)
+    destination = os.fspath(path)
+    parent = os.path.dirname(os.path.abspath(destination))
+    temp_name: str | None = None
+    try:
+        fd, temp_name = tempfile.mkstemp(prefix=".output-", suffix=".csv", dir=parent)
+        os.close(fd)
+        _write_csv_sibling(temp_name, rows)
+        parsed, parsed_ids = _read_csv_batch(temp_name)
+        if parsed_ids != [row.request_id for row in rows]:
+            raise OutputValidationError("reparse_request_order")
+        for typed, reparsed in zip(rows, parsed):
+            if not _reparse_equals(typed, reparsed):
+                raise OutputValidationError("reparse_mismatch")
+        validate_output_batch(parsed, contexts_in_request_order)
+        os.replace(temp_name, destination)
+        temp_name = None
+    finally:
+        if temp_name is not None and os.path.exists(temp_name):
+            try:
+                os.unlink(temp_name)
+            except OSError:
+                pass

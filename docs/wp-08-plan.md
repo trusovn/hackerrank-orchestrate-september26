@@ -1,6 +1,6 @@
 # WP-08 — Output Row, Explanation, Validation, And Atomic Writer
 
-Status: **IN PROGRESS — WP-08A ACCEPTED (2026-09-13), WP-08B AND WP-08C PENDING**
+Status: **COMPLETE — WP-08A, WP-08B, AND WP-08C ACCEPTED (2026-09-13)**
 
 Authority: [`master-plan.md`](master-plan.md), WP-08; governed by
 [`../problem_statement.md`](../problem_statement.md), especially Required
@@ -308,7 +308,7 @@ findings). WP-08B may proceed through its implementer self-preflight.
 
 # WP-08B — Independently Validate One Output Row
 
-Status: **READY AFTER WP-08A ACCEPTANCE**
+Status: **ACCEPTED (2026-09-13)**
 
 ```yaml
 agent_tier: strong
@@ -393,11 +393,72 @@ full-horizon replay.
 - Next: guided B implementation after self-preflight, followed immediately by
   a fresh independent acceptance review. Accepted B bytes unblock C.
 
+## WP-08B Review Record
+
+- Review date: 2026-09-13
+- Profile: guided, fresh independent acceptance review; two iterations
+- Scope: the WP-08B additions in `output.py` (`validate_output_row` and
+  private plan/change/replay/table helpers), the `OutputRowValidationTests`
+  suite in `tests/test_output.py`, and the WP-08B navigation rows in
+  `code/buy_or_wait/README.md` and `docs/project-map.md`. WP-08A bytes were
+  not modified.
+- Dependency evidence: `python3 -m unittest
+  tests.test_output.OutputRowBuildAndCodecTests tests.test_planning` — 67
+  tests OK.
+- Targeted evidence: `python3 -m unittest
+  tests.test_output.OutputRowValidationTests` — 15 tests OK on first
+  iteration; 18 tests OK on corrected bytes.
+- Owning/upstream evidence: `python3 -m unittest tests.test_output` — 35 OK
+  (38 on corrected bytes); `python3 -m unittest tests.test_forecast` — 72 OK;
+  `python3 -m compileall -q code tests` — OK; `git diff --check` and
+  `git diff --cached --check` — OK.
+- Independent probes (iteration 1): jointly corrupt decision/row variants,
+  non-anchor sibling occurrence ID (`change_not_eligible`), corrupted cached
+  safety verdict ignored in favor of fresh replay, NaN and boolean type
+  confusion (`amount_out_of_range`), wait plan date/amount boundaries,
+  changed-row replay breach, status-table siblings, partial order/flag
+  boundaries, foreign installments option ID, and frozen-input purity —
+  13/15 clean; two probe-harness artifacts were re-derived and are not
+  defects.
+- Correction cycle: first review found F-01/P1 (partial rows accepted when
+  `payment_methods_user_will_consider` excludes `PARTIAL_PAYMENT` — missing
+  independent preference gate, B-AC-03/FR-08-04), F-02/P1 (same missing gate
+  for `INSTALLMENTS`), and F-03/P2 (an incoherent decision escaped
+  `validate_output_row` as a raw `IndexError` from `explain_decision` instead
+  of a source-safe `OutputValidationError`, violating B-AC-07's rejection
+  contract). Fixed on the current bytes: `_validate_plan_by_method` now
+  enforces `full_preference_excluded`/`wait_preference_excluded`/
+  `partial_preference_excluded`, `_validate_installments` enforces
+  `installment_preference_excluded`, and `_validate_decision_coherence`
+  raises `invalid_decision` before rendering. Regression tests added:
+  `test_full_wait_and_partial_preferences_reject`,
+  `test_installment_preference_rejects`,
+  `test_incoherent_decision_rejects_before_explanation_rendering`, and
+  `test_incoherent_decision_rejects_before_rendering`.
+- Post-correction probes: F1-redo and F2-redo (real planner rows with the
+  profile flipped to exclude the method) reject with the new reason codes;
+  F3/F3b reject as `invalid_decision` with no non-`OutputValidationError`
+  escape. False-reject risk checked against planner semantics: full/wait
+  gate conditions mirror `_no_change_templates` gating, the changed-WAIT
+  derivation sits inside the `accepted_full` block, and
+  `NOT_RECOMMENDED` always pairs with `selected_candidate=None`, so genuine
+  planner output for full/wait/partial/installments still validates.
+- Broad gate: owned by the fresh post-correction reviewer and run —
+  `python3 -m unittest discover -s tests -p 'test_*.py'` — 340 tests OK
+  (1 skipped); `python3 -m compileall -q code tests` — OK;
+  `git diff --check` (staged and unstaged) — OK. The first iteration's gate
+  was suppressed after the decisive F-01/F-02/F-03 failures per the
+  discovery-review rule; the corrected-bytes gate is final.
+- No open WP-08B findings remain.
+
+Verdict: **ACCEPT** (B-AC-01–B-AC-07 satisfied on the corrected bytes; no
+open findings). WP-08C may proceed through its implementer self-preflight.
+
 ---
 
 # WP-08C — Validate The Batch And Replace The CSV Atomically
 
-Status: **READY AFTER WP-08B ACCEPTANCE**
+Status: **ACCEPTED (2026-09-13)**
 
 ```yaml
 agent_tier: standard
@@ -476,6 +537,48 @@ failures before or during replacement.
 - Next: guided C implementation after self-preflight, followed immediately by
   a fresh independent acceptance review owning final WP-08 verdict.
 
+## WP-08C Review Record
+
+- Review date: 2026-09-13
+- Profile: guided, fresh independent acceptance review; single iteration
+- Scope: the WP-08C additions in `output.py` (`OutputContext`,
+  `validate_output_batch`, `write_output_atomic`, and private batch/CSV
+  helpers), the `OutputBatchAndAtomicWriterTests` suite in
+  `tests/test_output.py`, and the WP-08C navigation rows in
+  `code/buy_or_wait/README.md` and `docs/project-map.md`. WP-08A/B bytes were
+  not modified.
+- Dependency evidence: `python3 -m unittest
+  tests.test_output.OutputRowBuildAndCodecTests
+  tests.test_output.OutputRowValidationTests` — 38 tests OK.
+- Targeted evidence: `python3 -m unittest
+  tests.test_output.OutputBatchAndAtomicWriterTests` — 13 tests OK on the
+  first and only iteration.
+- Independent probes: duplicate context IDs (`duplicate_context`), fsync
+  failure mid-write, truncated-temp reparse failure (`unexpected_header`),
+  tampered reparse equality (`reparse_mismatch`), out-of-order rows rejected
+  before any temp or publication, sample context among evaluation contexts
+  (`sample_scope` before replace), and a success-path `os.replace` call
+  counter confirming exactly one replace with no sibling temp remaining —
+  all clean; sentinel destination preserved byte-for-byte and temp removed in
+  every failure probe.
+- Owning/upstream evidence: `python3 -m unittest tests.test_output
+  tests.test_planning tests.test_forecast` — 170 tests OK;
+  `python3 -m unittest tests.test_agent_foundation_contract` — 3 tests OK;
+  `python3 -m compileall -q code tests` — OK; `git diff --check` and
+  `git diff --cached --check` — OK.
+- Broad gate: owned and run by this fresh reviewer after targeted/adversarial
+  evidence was clean — `python3 -m unittest discover -s tests -p 'test_*.py'`
+  — 353 tests OK (1 skipped).
+- Residual note (not a defect): a typed row carrying a noncanonical Decimal
+  exponent (e.g. `900.00000`) passes numeric validation, but published CSV
+  bytes are canonical via `_plain_decimal` and reparse-equality enforces
+  canonical rendering. Directory fsync after `os.replace` remains out of
+  scope per the plan's durability note.
+- No open WP-08C findings remain.
+
+Verdict: **ACCEPT** (C-AC-01–C-AC-06 satisfied; no open findings). WP-08 is
+complete; WP-09 and WP-10 may proceed.
+
 ## Finite-Risk Coverage Contract
 
 Keep row IDs stable across A/B/C and correction reviews.
@@ -484,12 +587,12 @@ Keep row IDs stable across A/B/C and correction reviews.
 |---|---|---|---|---|---|
 | FR-08-01 exact fields/lexemes | five methods; four statuses; safe 0/A/fraction/negative-zero/NaN/exponent; earliest date/empty; plan/action none/populated | typed encode/decode/encode and exact dict | A codec tables and malformed counterexamples | alter only a numeric lexeme; parser rejects noncanonical form | A implementer/reviewer — **pass on corrected bytes (2026-09-13; F-01/F-02 found and fixed)** |
 | FR-08-02 grounded explanations | full unchanged/changed; partial; installments fee zero/nonzero; wait unchanged/changed; four fallbacks | exact renderer from case/baseline/decision | A template fixtures and forbidden-claim assertions | swap fallback reason or wait date; text changes/rejects | A implementer/reviewer — **pass on accepted A bytes (2026-09-13)** |
-| FR-08-03 status/method table | full now/changed; partial; installment; wait unchanged/changed; four fallbacks | validator-derived table versus row | B valid rows plus single-field corruption | pair affordable-now with changes or later with changed wait; reject | B implementer/reviewer |
-| FR-08-04 exact eligible plans | full/wait; partial two; installment 2/3/N; before D/deadline/horizon; bad total/order/count/cap/preference | payments plus source option/request/profile | B boundary tables | mutate installment date preserving count/total; reject | B implementer/reviewer |
-| FR-08-05 exact eligible actions | 0/1/2/3/4; stop/reduce; fixed/protected/disallowed/floor; duplicate family/conflict | public series catalogue plus case/profile/replay | B allowed/adversarial tables | use another occurrence ID of same family to hide conflict; reject | B implementer/reviewer |
-| FR-08-06 fresh safety | equality at minimum; first/later/day-90 breach; changed repair/mismatch; corrupt cached verdict | fresh row-derived WP-06 replay through final checkpoint | B literal ledgers | mark cached replay safe and insert late debit; still reject | B implementer/reviewer |
-| FR-08-07 exact batch | missing/extra/duplicate/sample/order/context mismatch; complete evaluation sequence | expected ID sequence versus materialized rows | C exact batch tables | permute two valid rows; reject before replace | C implementer/reviewer |
-| FR-08-08 all-or-nothing publication | new/existing destination; fail before/during write, flush, reparse, revalidation, replace; success | real temp-dir bytes and sibling inventory | C sentinel and success tests | fail patched replace after valid temp closes; old bytes/temp cleanup | C implementer/final reviewer |
+| FR-08-03 status/method table | full now/changed; partial; installment; wait unchanged/changed; four fallbacks | validator-derived table versus row | B valid rows plus single-field corruption | pair affordable-now with changes or later with changed wait; reject | B implementer/reviewer — **pass on accepted B bytes (2026-09-13; F-01–F-03 found and fixed)** |
+| FR-08-04 exact eligible plans | full/wait; partial two; installment 2/3/N; before D/deadline/horizon; bad total/order/count/cap/preference | payments plus source option/request/profile | B boundary tables | mutate installment date preserving count/total; reject | B implementer/reviewer — **pass on accepted B bytes (2026-09-13; preference dimension fixed via F-01/F-02)** |
+| FR-08-05 exact eligible actions | 0/1/2/3/4; stop/reduce; fixed/protected/disallowed/floor; duplicate family/conflict | public series catalogue plus case/profile/replay | B allowed/adversarial tables | use another occurrence ID of same family to hide conflict; reject | B implementer/reviewer — **pass on accepted B bytes (2026-09-13)** |
+| FR-08-06 fresh safety | equality at minimum; first/later/day-90 breach; changed repair/mismatch; corrupt cached verdict | fresh row-derived WP-06 replay through final checkpoint | B literal ledgers | mark cached replay safe and insert late debit; still reject | B implementer/reviewer — **pass on accepted B bytes (2026-09-13)** |
+| FR-08-07 exact batch | missing/extra/duplicate/sample/order/context mismatch; complete evaluation sequence | expected ID sequence versus materialized rows | C exact batch tables | permute two valid rows; reject before replace | C implementer/reviewer — **pass on accepted C bytes (2026-09-13)** |
+| FR-08-08 all-or-nothing publication | new/existing destination; fail before/during write, flush, reparse, revalidation, replace; success | real temp-dir bytes and sibling inventory | C sentinel and success tests | fail patched replace after valid temp closes; old bytes/temp cleanup | C implementer/final reviewer — **pass on accepted C bytes (2026-09-13)** |
 
 ## Package Exit Criteria
 
@@ -499,3 +602,7 @@ order; every FR-08 row passes on final relevant bytes; `tests.test_output`,
 the complete unit suite, compile gate, agent foundation contract, and
 `git diff --check`; navigation is current; and WP-08 does not implement WP-09
 or WP-10. Accepted C bytes unblock WP-09 and WP-10.
+
+WP-08A, WP-08B, and WP-08C all have fresh independent `ACCEPT` records above.
+WP-08 is complete; every FR-08 row passed on final relevant bytes and the
+final reviewer owns the completed broad gate. WP-09 and WP-10 may proceed.
