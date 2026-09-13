@@ -401,7 +401,8 @@ proceed through its implementer self-preflight.
 
 # WP-07B — Enumerate Changes And Certify Changed Candidates
 
-Status: **READY**
+Status: **ACCEPTED** — final verdict ACCEPT (2026-09-13), see Review Record
+below
 
 ```yaml
 agent_tier: standard
@@ -492,6 +493,43 @@ safe changed wait/full date, without changing baseline capacity.
 - Required follow-on: immediately after implementation or correction, hand the
   completed bytes to a fresh independent acceptance reviewer. Only accepted
   WP-07B bytes unblock WP-07C.
+
+## Review Record
+
+- Review date: 2026-09-13
+- Profile: guided, fresh independent acceptance review (two rounds: initial
+  CHANGES_REQUESTED, then correction-round ACCEPT on the fixed bytes)
+- Scope: `planning.py`, `test_planning.py`, and the WP-07B navigation rows in
+  `code/buy_or_wait/README.md` and `docs/project-map.md`.
+- Initial round: F-01 (P1) order-sensitive anchor comparison dropped safe
+  multi-family candidates (`anchor_ids` sorted vs chronological
+  `applied_change_event_ids` at the template and earliest-changed-date gates);
+  F-02 (P2) `_action_sets` generated four-family sets; F-03 (P2) one source
+  event anchoring two families produced actions for both instead of none.
+- Correction round on the fixed bytes: F-01 fixed by comparing applied IDs as
+  an ordered set; F-02 fixed by stopping extension at three families; F-03
+  fixed by dropping anchors shared across families in `_family_catalogue`.
+  Independent regression probes (order-sensitive two-family fixture, four-
+  family enumeration, cross-family anchor) all pass on the corrected bytes.
+- Regression tests added: `test_changed_replay_applied_ids_do_not_depend_on_application_order`,
+  `test_four_family_sets_never_exceed_three_families`,
+  `test_cross_family_anchor_produces_no_actions`.
+- Dependency evidence: `python3 -m unittest
+  tests.test_planning.NoChangeCandidateTests tests.test_planning.SafetyReplayTests` — OK.
+- Targeted evidence: `python3 -m unittest
+  tests.test_planning.SpendingChangeCandidateTests` — 17 tests OK.
+- Owning and repository gates: `python3 -m unittest tests.test_planning` — 42
+  tests OK; `python3 -m unittest tests.test_forecast` — 72 tests OK;
+  `python3 -m unittest tests.test_agent_foundation_contract` — 3 tests OK;
+  `python3 -m unittest discover -s tests -p 'test_*.py'` — 297 tests OK
+  (1 skipped); `python3 -m compileall -q code tests` — OK; `git diff --check`
+  — OK. Full 250-request dataset pipeline processed in ~1.1s.
+- Broad gate: deferred to the fresh final WP-07C reviewer per the split
+  verification contract.
+- No open WP-07B findings remain.
+
+Verdict: **ACCEPT** (B-AC-01–B-AC-07 satisfied on the corrected bytes; no open
+findings). WP-07C may proceed through its implementer self-preflight.
 
 ---
 

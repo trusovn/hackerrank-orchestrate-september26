@@ -8,7 +8,7 @@ from decimal import ROUND_FLOOR, Decimal
 from enum import Enum
 
 from buy_or_wait.domain import (
-    Payment, PaymentMethod, PaymentOptionRecord, RequestCase, SpendingChange, SpendingChangeType,
+    Flexibility, Payment, PaymentMethod, PaymentOptionRecord, RequestCase, SpendingChange, SpendingChangeType,
 )
 from buy_or_wait.events import EventNormalizationError, convert_exact
 from buy_or_wait.forecast import BaselineForecast, PrimitiveMovement
@@ -448,3 +448,232 @@ def build_no_change_candidate_pool(case: RequestCase, baseline: BaselineForecast
             diagnostics.append("unsafe_replay")
     return CandidatePool(case.request.request_id, capacity, tuple(templates), tuple(candidates),
                          tuple(diagnostics))
+
+
+# --- WP-07B spending-change enumeration and changed candidates ---------------
+
+
+@dataclass(frozen=True)
+class SpendingChangeAction:
+    """One permitted action on one fixed-recurrence family anchor event."""
+
+    change_type: SpendingChangeType
+    event_id: str
+    new_amount: Decimal | None = None
+
+
+@dataclass(frozen=True)
+class FamilyAction:
+    """Eligible actions for one family, plus every canonical nonempty set."""
+
+    family_id: str
+    anchor_event_id: str
+    actions: tuple[SpendingChangeAction, ...]
+    action_sets: tuple[tuple[SpendingChangeAction, ...], ...]
+
+
+def _family_catalogue(case: RequestCase, baseline: BaselineForecast) -> dict[str, dict]:
+    """Family catalogue from future fixed-recurrence debit movements.
+
+    Maps family_id -> {anchor_event_id, source_amounts, movements}. Only
+    primitive movements with phase == 'debit', origin == 'fixed_recurrence',
+    a nonblank family_id, occurrence date, and exact source amount/currency
+    qualify; explicit commitments, reserves, variable envelopes, and credits
+    never become changeable.
+    """
+    families: dict[str, dict] = {}
+    for movement in baseline.primitive_movements:
+        if (movement.phase != "debit" or movement.origin != "fixed_recurrence" or
+                not movement.family_id or movement.occurrence_date is None or
+                not _is_money(movement.source_amount) or not movement.source_currency or
+                not movement.home_currency):
+            continue
+        if movement.date < case.request.request_date:
+            continue
+        entry = families.setdefault(movement.family_id, {"movements": [], "anchors": set()})
+        entry["movements"].append(movement)
+        for event_id in movement.source_event_ids:
+            if event_id:
+                entry["anchors"].add(event_id)
+    # An anchor event must resolve to exactly one family; events shared across
+    # families are ambiguous and produce no action anywhere.
+    event_families: dict[str, set[str]] = {}
+    for family_id, entry in families.items():
+        for event_id in entry["anchors"]:
+            event_families.setdefault(event_id, set()).add(family_id)
+    for entry in families.values():
+        entry["anchors"] = {event_id for event_id in entry["anchors"] if len(event_families[event_id]) == 1}
+    return families
+
+
+def enumerate_spending_change_actions(case: RequestCase,
+                                      baseline: BaselineForecast) -> tuple[FamilyAction, ...]:
+    """Return eligible per-family actions with canonical nonempty action sets."""
+    families = _family_catalogue(case, baseline)
+    protected = case.profile.expense_categories_to_protect
+    reduce_cats = case.profile.expense_categories_user_is_willing_to_reduce
+    stop_cats = case.profile.expense_categories_user_is_willing_to_stop
+    family_actions: list[FamilyAction] = []
+    for family_id in sorted(families):
+        entry = families[family_id]
+        movements = entry["movements"]
+        # A source event must identify one exact forecast occurrence. Select the
+        # latest supplied historical anchor, then stable event ID; only a future
+        # supplied event may anchor when no historical event is available.
+        compatible = [event for event in case.events if event.event_id in entry["anchors"]]
+        historical = [event for event in compatible
+                      if event.settlement_date is not None and event.settlement_date < case.request.request_date]
+        anchors = historical or compatible
+        if not anchors:
+            continue
+        anchor_event = max(anchors, key=lambda event: (event.settlement_date or event.event_date, event.event_id))
+        anchor_event_id = anchor_event.event_id
+        matching = [movement for movement in movements if anchor_event_id in movement.source_event_ids]
+        if len({movement.date for movement in matching}) != len(matching):
+            continue
+        category = anchor_event.category
+        if category in protected:
+            continue
+        flexibilities = {anchor_event.flexibility}
+        allow_reduce = (flexibilities & {Flexibility.REDUCIBLE, Flexibility.REDUCIBLE_OR_STOPPABLE} and
+                        category in reduce_cats)
+        allow_stop = (flexibilities & {Flexibility.STOPPABLE, Flexibility.REDUCIBLE_OR_STOPPABLE} and
+                      category in stop_cats)
+        actions: list[SpendingChangeAction] = []
+        if allow_stop:
+            actions.append(SpendingChangeAction(SpendingChangeType.STOP, anchor_event_id))
+        if allow_reduce:
+            floor = anchor_event.minimum_allowed_amount
+            if (isinstance(floor, Decimal) and floor.is_finite() and floor >= 0 and
+                    all(floor < movement.source_amount for movement in movements
+                        if movement.source_amount is not None)):
+                actions.append(SpendingChangeAction(SpendingChangeType.REDUCE_TO, anchor_event_id, floor))
+        if not actions:
+            continue
+        # Canonical nonempty action sets: one action per family, never stop+reduce.
+        single = [((action,),) for action in actions]
+        action_sets: tuple[tuple[SpendingChangeAction, ...], ...]
+        action_sets = tuple(sorted((set_[0] for set_ in single),
+                                   key=lambda s: (s[0].change_type.value, s[0].event_id,
+                                                  str(s[0].new_amount))))
+        family_actions.append(FamilyAction(family_id, anchor_event_id, tuple(actions), action_sets))
+    return tuple(family_actions)
+
+
+def _action_sets(family_actions: tuple[FamilyAction, ...]) -> tuple[tuple[SpendingChangeAction, ...], ...]:
+    """Every canonical combination of one-to-three distinct families."""
+    combinations: list[tuple[SpendingChangeAction, ...]] = []
+
+    def extend(index: int, current: tuple[SpendingChangeAction, ...]) -> None:
+        if len(current) >= 3:
+            return
+        if index >= len(family_actions):
+            return
+        for action_set in family_actions[index].action_sets:
+            new = current + action_set
+            combinations.append(new)
+            extend(index + 1, new)
+        extend(index + 1, current)
+
+    extend(0, ())
+    combinations.sort(key=lambda s: (
+        len(s),
+        tuple((action.event_id, action.change_type.value, str(action.new_amount)) for action in s),
+    ))
+    return tuple(combinations)
+
+
+def _canonical_changes(changes: tuple[SpendingChangeAction, ...]) -> tuple[SpendingChange, ...]:
+    ordered = sorted(changes, key=lambda a: (a.event_id, a.change_type.value, str(a.new_amount)))
+    return tuple(SpendingChange(action.change_type, action.event_id, action.new_amount) for action in ordered)
+
+
+def _zero_payment_reduction(case: RequestCase, baseline: BaselineForecast,
+                            changes: tuple[SpendingChange, ...]) -> Decimal | None:
+    baseline_replay = replay_schedule(case, baseline)
+    changed_replay = replay_schedule(case, baseline, (), changes)
+    if baseline_replay.minimum_headroom is None or changed_replay.minimum_headroom is None:
+        return None
+    reduction = changed_replay.minimum_headroom - baseline_replay.minimum_headroom
+    if reduction < 0:
+        return None
+    return reduction
+
+
+def _changed_templates(case: RequestCase, baseline: BaselineForecast,
+                       eligible_templates: tuple[PaymentTemplate, ...],
+                       family_actions: tuple[FamilyAction, ...]) -> tuple[list[PlanCandidate], list[str]]:
+    """Certify changed candidates: non-wait templates plus exhaustive changed dates."""
+    candidates: list[PlanCandidate] = []
+    diagnostics: list[str] = []
+    accepted_full = RecommendationMethod.FULL_PAYMENT.value in {
+        method.value for method in case.profile.payment_methods_user_will_consider}
+    requested = case.request.requested_amount
+    deadline = case.request.desired_completion_date
+    horizon_end = baseline.horizon_end
+    request_date = case.request.request_date
+    seen: set[tuple] = set()
+    last_search_day = min(deadline, horizon_end)
+    for action_set in _action_sets(family_actions):
+        changes = _canonical_changes(action_set)
+        anchor_ids = tuple(sorted({action.event_id for action in action_set}))
+        applied: dict[tuple, PlanCandidate] = {}
+        for template in eligible_templates:
+            if template.recommendation_method is RecommendationMethod.WAIT:
+                continue
+            replay = replay_schedule(case, baseline, template.payments, changes)
+            # Applied IDs are compared as an ordered set: the replay records
+            # them in chronological application order, which need not equal the
+            # canonical sorted anchor order for multi-family sets.
+            if not replay.safe or tuple(sorted(replay.applied_change_event_ids)) != anchor_ids:
+                if replay.first_failure is not None and replay.first_failure.reason_code not in {
+                        "minimum_balance_breach", "payment_invalid"}:
+                    diagnostics.append(f"changed_{replay.first_failure.reason_code}")
+                continue
+            if not _chronological_complete(template.payments, case, baseline):
+                continue
+            amount_ok = (sum((payment.amount for payment in template.payments), Decimal("0")) ==
+                         (requested if template.recommendation_method is not RecommendationMethod.INSTALLMENTS
+                          else template.payments[-1].amount * len(template.payments)))
+            if not amount_ok:
+                continue
+            reduction = _zero_payment_reduction(case, baseline, changes)
+            if reduction is None:
+                continue
+            key = (template.recommendation_method, template.payment_option_id, template.payments, changes)
+            if key in seen:
+                continue
+            seen.add(key)
+            applied[key] = PlanCandidate(template.recommendation_method, template.payments, changes,
+                                         template.payment_option_id, replay, reduction)
+        candidates.extend(applied.values())
+        # Exhaustively test one full payment on every date D..min(deadline, horizon_end).
+        if accepted_full:
+            earliest: date | None = None
+            for offset in range((last_search_day - request_date).days + 1):
+                day = request_date + timedelta(days=offset)
+                replay = replay_schedule(case, baseline, (Payment(day, requested),), changes)
+                if replay.safe and tuple(sorted(replay.applied_change_event_ids)) == anchor_ids:
+                    earliest = day
+                    break
+            if earliest is not None:
+                method = RecommendationMethod.FULL_PAYMENT if earliest == request_date else RecommendationMethod.WAIT
+                key = (method, None, (Payment(earliest, requested),), changes)
+                if key not in seen:
+                    seen.add(key)
+                    reduction = _zero_payment_reduction(case, baseline, changes)
+                    if reduction is not None:
+                        candidates.append(PlanCandidate(method, (Payment(earliest, requested),), changes,
+                                                        None, replay, reduction))
+    return candidates, diagnostics
+
+
+def build_candidate_pool(case: RequestCase, baseline: BaselineForecast) -> CandidatePool:
+    """Extend the accepted no-change pool with permitted changed candidates."""
+    pool = build_no_change_candidate_pool(case, baseline)
+    family_actions = enumerate_spending_change_actions(case, baseline)
+    if not family_actions:
+        return pool
+    changed, diagnostics = _changed_templates(case, baseline, pool.eligible_templates, family_actions)
+    return CandidatePool(pool.request_id, pool.capacity, pool.eligible_templates,
+                         pool.candidates + tuple(changed), pool.diagnostics + tuple(diagnostics))

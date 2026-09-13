@@ -241,6 +241,10 @@ from buy_or_wait.domain import PaymentOptionRecord  # noqa: E402
 from buy_or_wait.planning import (  # noqa: E402
     RecommendationMethod, build_no_change_candidate_pool,
 )
+from buy_or_wait.evidence import resolve_case_evidence  # noqa: E402
+from buy_or_wait.events import normalize_case_events  # noqa: E402
+from buy_or_wait.forecast import build_baseline_forecast  # noqa: E402
+from buy_or_wait.repository import DatasetRepository  # noqa: E402
 
 
 def planner_case(*, methods=(PaymentMethod.FULL_PAYMENT, PaymentMethod.PARTIAL_PAYMENT,
@@ -445,3 +449,375 @@ class NoChangeCandidateTests(unittest.TestCase):
         wrong = planner_case(options=(full_option(amount="800",),))
         with self.assertRaises(PlanningError):
             build_no_change_candidate_pool(wrong, source)
+
+
+# --- WP-07B spending-change candidate enumeration ----------------------------
+
+
+from buy_or_wait.domain import (  # noqa: E402
+    Direction, EventRecord, EventType, EventStatus, Flexibility,
+)
+from buy_or_wait.planning import (  # noqa: E402
+    _action_sets, build_candidate_pool, enumerate_spending_change_actions,
+)
+
+
+def change_case(*, amount="900", deadline="2026-03-01", methods=(PaymentMethod.FULL_PAYMENT,),
+                reduce_cats=frozenset({"dining"}), stop_cats=frozenset({"cloud_storage", "dining"}),
+                protected=frozenset({"rent"}), events=(), options=(), cap=None) -> RequestCase:
+    base = case()
+    if isinstance(events, EventRecord):
+        events = (events,)
+    return replace(
+        base,
+        request=replace(base.request, requested_amount=money(amount), desired_completion_date=d(deadline),
+                        allows_partial_payment=False),
+        profile=ProfileRecord("user_P", CurrencyCode.ZAR, money("1000"), money("100"), frozenset(),
+                              protected, reduce_cats, stop_cats, tuple(methods), cap),
+        events=tuple(events),
+        payment_options=tuple(options),
+    )
+
+
+def expense(event_id: str, category: str, flexibility: Flexibility, amount: str = "30",
+            day: str = "2025-12-01", *, direction: Direction = Direction.DEBIT,
+            status: EventStatus = EventStatus.SETTLED, floor: str | None = None) -> EventRecord:
+    return EventRecord(event_id, "user_P", EventType.EXPENSE, f"{event_id} desc", category, direction,
+                       money(amount), CurrencyCode.ZAR, d(day), d(day), status, None, flexibility,
+                       money(floor) if floor is not None else None)
+
+
+def recurring(day: str, ident: str, family: str, home: str, *, source_amount: str | None = None,
+              source_currency: CurrencyCode | None = None,
+              source_ids: tuple[str, ...] = ()) -> PrimitiveMovement:
+    return move(day, "debit", ident, f"-{home}" if True else "0", origin="fixed_recurrence", family=family,
+                source_amount=source_amount if source_amount is not None else home,
+                source_currency=source_currency if source_currency is not None else CurrencyCode.ZAR,
+                source_ids=source_ids if source_ids else (family,))
+
+
+class SpendingChangeCandidateTests(unittest.TestCase):
+    def test_only_mutable_fixed_recurrence_families_produce_actions(self) -> None:
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-15", "d1", "dining_series", "40", source_ids=("dining_event",)),
+            move("2026-01-15", "debit", "explicit", "-40", source_ids=("explicit_event",)),
+            move("2026-01-15", "credit", "credit", "40", source_ids=("credit_event",)),
+        )
+        actions = enumerate_spending_change_actions(
+            change_case(events=(expense("dining_event", "dining", Flexibility.REDUCIBLE, floor="20"),)),
+            source,
+        )
+        self.assertEqual([action.family_id for action in actions], ["dining_series"])
+        self.assertEqual([(a.change_type, a.new_amount) for a in actions[0].actions],
+                         [(SpendingChangeType.REDUCE_TO, money("20"))])
+
+    def test_protected_category_and_flexibility_gates(self) -> None:
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-15", "r1", "rent_series", "200", source_ids=("rent_event",)),
+            recurring("2026-01-16", "c1", "cloud_series", "10", source_ids=("cloud_event",)),
+        )
+        actions = enumerate_spending_change_actions(
+            change_case(events=(expense("rent_event", "rent", Flexibility.STOPPABLE),
+                                expense("cloud_event", "cloud_storage", Flexibility.STOPPABLE))),
+            source,
+        )
+        # Rent is protected; only cloud storage (in the stop set) produces a stop.
+        self.assertEqual([a.family_id for a in actions], ["cloud_series"])
+        self.assertEqual(actions[0].actions[0].change_type, SpendingChangeType.STOP)
+
+    def test_reduction_requires_floor_below_every_forecast_amount(self) -> None:
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-15", "a1", "dining_series", "40", source_ids=("dining_event",)),
+            recurring("2026-02-15", "a2", "dining_series", "50", source_ids=("dining_event",)),
+        )
+        # Floor 45 is above the 40 amount: no action may be generated.
+        actions = enumerate_spending_change_actions(
+            change_case(events=(expense("dining_event", "dining", Flexibility.REDUCIBLE, floor="45"))),
+            source,
+        )
+        self.assertEqual(actions, ())
+        actions = enumerate_spending_change_actions(
+            change_case(events=(expense("dining_event", "dining", Flexibility.REDUCIBLE, floor="20"))),
+            source,
+        )
+        self.assertEqual([(a.change_type, a.new_amount) for a in actions[0].actions],
+                         [(SpendingChangeType.REDUCE_TO, money("20"))])
+
+    def test_stop_requires_willingness_and_reduce_requires_reduce_or_both(self) -> None:
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-15", "r1", "st_series", "10", source_ids=("st_event",)),
+            recurring("2026-01-16", "rd1", "rd_series", "10", source_ids=("rd_event",)),
+        )
+        # stop_cats only: reducible family must not stop; reducible_or_stoppable may reduce.
+        actions = enumerate_spending_change_actions(
+            change_case(reduce_cats=frozenset({"dining"}), stop_cats=frozenset({"cloud_storage"}),
+                        events=(expense("st_event", "streaming", Flexibility.REDUCIBLE),
+                                expense("rd_event", "dining", Flexibility.REDUCIBLE_OR_STOPPABLE, floor="5"))),
+            source,
+        )
+        self.assertEqual([a.family_id for a in actions], ["rd_series"])
+        self.assertEqual([(a.change_type, a.new_amount) for a in actions[0].actions],
+                         [(SpendingChangeType.REDUCE_TO, money("5"))])
+        # stop Cats include streaming: stop action for the fixed-flexibility series is still gated
+        # by flexibility; reducible-only flexibility may not stop.
+        actions = enumerate_spending_change_actions(
+            change_case(reduce_cats=frozenset(), stop_cats=frozenset({"streaming"}),
+                        events=(expense("st_event", "streaming", Flexibility.REDUCIBLE))),
+            source,
+        )
+        self.assertEqual(actions, ())
+
+    def test_ambiguous_anchor_and_history_only_families_produce_no_action(self) -> None:
+        # Two movements on the same family/date carry the same event ID -> ambiguous.
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-15", "x1", "dup_series", "10", source_ids=("dup_event",)),
+            recurring("2026-01-15", "x2", "dup_series", "10", source_ids=("dup_event",)),
+            recurring("2026-01-15", "h1", "hist_series", "10", source_ids=("hist_event",)),
+        )
+        # hist_series has a 2026-01-15 occurrence which is future relative to D=2026-01-10,
+        # so a historical anchor exists for it... use an all-history family instead.
+        past_only = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2025-12-15", "h1", "hist_series", "10", source_ids=("hist_event",)),
+        )
+        actions = enumerate_spending_change_actions(
+            change_case(events=(expense("hist_event", "dining", Flexibility.REDUCIBLE, floor="5"))),
+            past_only,
+        )
+        self.assertEqual(actions, ())
+        actions = enumerate_spending_change_actions(
+            change_case(events=(expense("dup_event", "dining", Flexibility.REDUCIBLE, floor="5"))),
+            source,
+        )
+        self.assertEqual(actions, ())
+
+    def test_one_to_three_family_sets_are_complete_and_canonical(self) -> None:
+        moves = [move("2026-01-10", "opening", "open")]
+        events = []
+        for index, (family, event_id, category, flex, floor) in enumerate((
+            ("f1_series", "ev1", "dining", Flexibility.REDUCIBLE, "10"),
+            ("f2_series", "ev2", "cloud_storage", Flexibility.STOPPABLE, None),
+            ("f3_series", "ev3", "dining", Flexibility.REDUCIBLE_OR_STOPPABLE, "7"),
+        )):
+            moves.append(recurring("2026-01-15", f"m{index}", family, "20", source_ids=(event_id,)))
+            events.append(expense(event_id, category, flex, floor=floor))
+        source = baseline(*moves)
+        actions = enumerate_spending_change_actions(change_case(events=tuple(events)), source)
+        by_family = {a.family_id: a for a in actions}
+        self.assertEqual(sorted(by_family), ["f1_series", "f2_series", "f3_series"])
+        # 7 nonempty subsets: {1},{2},{3},{1,2},{1,3},{2,3},{1,2,3}
+        self.assertEqual(len(by_family["f1_series"].action_sets), 1)
+        self.assertEqual(len(by_family["f2_series"].action_sets), 1)
+        self.assertEqual(len(by_family["f3_series"].action_sets), 2)
+        pool = build_candidate_pool(change_case(events=tuple(events), amount="800"), source)
+        changed = [c for c in pool.candidates if c.spending_changes]
+        self.assertEqual(len(changed), 11)
+        # Canonical order: stable family ID.
+        for candidate in changed:
+            ids = [change.event_id for change in candidate.spending_changes]
+            self.assertEqual(ids, sorted(ids))
+
+    def test_no_duplicate_family_through_alternate_ids_and_no_stop_reduce_mix(self) -> None:
+        # Two occurrence IDs of the same family reference different events; combining
+        # stop on one and reduce on the other must never happen.
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-15", "p1", "dup_series", "10", source_ids=("dup_event_a",)),
+            recurring("2026-02-15", "p2", "dup_series", "10", source_ids=("dup_event_b",)),
+        )
+        actions = enumerate_spending_change_actions(
+            change_case(events=(expense("dup_event_a", "dining", Flexibility.REDUCIBLE_OR_STOPPABLE, floor="5"),
+                                expense("dup_event_b", "dining", Flexibility.REDUCIBLE_OR_STOPPABLE, floor="5")),
+                        reduce_cats=frozenset({"dining"}), stop_cats=frozenset({"dining"})),
+            source,
+        )
+        self.assertEqual(len(actions), 1)
+        # Latest compatible occurrence (2026-02-15) anchors the action.
+        self.assertEqual(actions[0].anchor_event_id, "dup_event_b")
+
+    def test_changed_replay_uses_earliest_safe_full_date_and_marks_wait(self) -> None:
+        # Opening 1000, dip -400 on 01-20, refund +500 on 01-30. Full 900 unsafe without
+        # changes; stopping the -400 fixed debit makes full payment safe from D onward.
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-20", "dip1", "dip_series", "400", source_ids=("dip_event",)),
+            move("2026-01-30", "credit", "refund", "500", source_ids=("refund",)),
+        )
+        current = change_case(amount="900", events=(expense("dip_event", "dining", Flexibility.STOPPABLE),),
+                              deadline="2026-02-28")
+        pool = build_candidate_pool(current, source)
+        full_changed = [c for c in pool.candidates if c.spending_changes and
+                        c.recommendation_method is RecommendationMethod.FULL_PAYMENT]
+        self.assertEqual(len(full_changed), 1)
+        candidate = full_changed[0]
+        self.assertEqual(candidate.payments, (Payment(d("2026-01-10"), money("900")),))
+        self.assertEqual(list(change.event_id for change in candidate.spending_changes), ["dip_event"])
+        self.assertTrue(candidate.safety_replay.safe)
+        self.assertEqual(candidate.safety_replay.applied_change_event_ids, ("dip_event",))
+        self.assertEqual(candidate.forecast_debit_reduction, money("400"))
+
+    def test_changed_wait_candidate_has_no_option_id_and_later_date(self) -> None:
+        # Full is unsafe at D even with changes, but safe on 01-24 once a credit lands.
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            move("2026-01-10", "debit", "immediate", "-100", source_ids=("immediate",)),
+            recurring("2026-01-20", "dip1", "dip_series", "400", source_ids=("dip_event",)),
+            recurring("2026-01-21", "dip2", "dip_series", "400", source_ids=("dip_event",)),
+            move("2026-01-24", "credit", "payday", "450", source_ids=("payday",)),
+        )
+        current = change_case(amount="900", events=(expense("dip_event", "dining", Flexibility.STOPPABLE),),
+                              deadline="2026-02-28")
+        pool = build_candidate_pool(current, source)
+        waits = [c for c in pool.candidates if c.spending_changes and
+                 c.recommendation_method is RecommendationMethod.WAIT]
+        self.assertEqual(len(waits), 1)
+        self.assertEqual(waits[0].payments, (Payment(d("2026-01-24"), money("900")),))
+        self.assertIsNone(waits[0].payment_option_id)
+        self.assertEqual(waits[0].safety_replay.applied_change_event_ids, ("dip_event",))
+
+    def test_no_effect_change_produces_no_candidate(self) -> None:
+        # The family is already at its floor: a reduce-to-floor replay has no effect on
+        # the ledger, so no changed candidate may appear for that action alone.
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-15", "f1", "dining_series", "10", source_ids=("dining_event",)),
+        )
+        # Floor equals the forecast amount: floor-below-every-amount gate excludes the action.
+        actions = enumerate_spending_change_actions(
+            change_case(events=(expense("dining_event", "dining", Flexibility.REDUCIBLE, floor="10"))),
+            source,
+        )
+        self.assertEqual(actions, ())
+
+    def test_pending_debit_survives_same_category_same_amount_change(self) -> None:
+        # A pending explicit debit with the same category and amount as the changed family
+        # must survive unchanged: only fixed_recurrence origins are mutable. The changed
+        # wait path (payment after the pending debit) certifies the surviving -30 row.
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-16", "rec1", "dining_series", "30", source_ids=("dining_event",)),
+            move("2026-01-17", "debit", "pending", "-30", origin="explicit", source_ids=("pending_event",)),
+            move("2026-01-18", "credit", "refund", "30", source_ids=("refund",)),
+        )
+        current = change_case(amount="900",
+                              events=(expense("dining_event", "dining", Flexibility.STOPPABLE),
+                                      expense("pending_event", "dining", Flexibility.FIXED,
+                                              day="2026-01-17", status=EventStatus.PENDING)),
+                              deadline="2026-02-28")
+        pool = build_candidate_pool(current, source)
+        stop = [c for c in pool.candidates
+                if any(change.change_type is SpendingChangeType.STOP for change in c.spending_changes)]
+        self.assertTrue(stop)
+        pending_rows = [point for point in stop[0].safety_replay.checkpoints
+                        if point.stable_id == "pending"]
+        self.assertEqual(len(pending_rows), 1)
+        self.assertEqual(pending_rows[0].cash_balance, money("970"))
+
+    def test_capacity_and_no_change_ordering_preserved_with_changes(self) -> None:
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-20", "dip1", "dip_series", "400", source_ids=("dip_event",)),
+            move("2026-01-30", "credit", "refund", "500", source_ids=("refund",)),
+        )
+        current = change_case(amount="550", deadline="2026-02-28", methods=(
+            PaymentMethod.FULL_PAYMENT, PaymentMethod.PARTIAL_PAYMENT),
+            events=(expense("dip_event", "dining", Flexibility.STOPPABLE),))
+        pool = build_candidate_pool(current, source)
+        self.assertEqual(pool.capacity, compute_baseline_capacity(current, source))
+        changed_flags = [bool(candidate.spending_changes) for candidate in pool.candidates]
+        # No-change candidates precede changed candidates: all False before the first True.
+        first_changed = next((i for i, flag in enumerate(changed_flags) if flag), len(changed_flags))
+        self.assertTrue(all(not flag for flag in changed_flags[:first_changed]))
+        self.assertTrue(changed_flags[first_changed:])
+
+    def test_duplicate_changed_candidates_are_suppressed(self) -> None:
+        # Two action sets that reduce the same family to the same floor collapse to one
+        # candidate; only distinct (method, payments, changes) tuples survive.
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-15", "f1", "dining_series", "20", source_ids=("dining_event",)),
+        )
+        current = change_case(amount="900", events=(expense("dining_event", "dining", Flexibility.REDUCIBLE, floor="10"),),
+                              deadline="2026-02-28")
+        pool = build_candidate_pool(current, source)
+        keys = [(c.recommendation_method, c.payment_option_id, c.payments, c.spending_changes) for c in pool.candidates]
+        self.assertEqual(len(keys), len(set(keys)))
+
+    def test_changed_replay_applied_ids_do_not_depend_on_application_order(self) -> None:
+        # F-01 regression: two families whose first debits occur in reverse-alphabetical
+        # date order; the replay applies anchors chronologically but the candidate must
+        # still be accepted (applied IDs compared as an ordered set).
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-15", "m1", "b_series", "30", source_ids=("event_1816",)),
+            recurring("2026-01-16", "m2", "a_series", "30", source_ids=("event_1815",)),
+        )
+        current = change_case(amount="900", deadline="2026-02-28",
+                              events=(expense("event_1815", "dining", Flexibility.STOPPABLE),
+                                      expense("event_1816", "dining", Flexibility.STOPPABLE)))
+        pool = build_candidate_pool(current, source)
+        changed = [candidate for candidate in pool.candidates if candidate.spending_changes]
+        self.assertTrue(changed)
+        for candidate in changed:
+            self.assertEqual(tuple(sorted(candidate.safety_replay.applied_change_event_ids)),
+                             tuple(sorted({change.event_id for change in candidate.spending_changes})))
+
+    def test_four_family_sets_never_exceed_three_families(self) -> None:
+        # F-02 regression (FR-05): four eligible families must not produce a
+        # four-family action set; enumeration stops at three.
+        moves = [move("2026-01-10", "opening", "open")]
+        events = []
+        for index, family in enumerate(("f1", "f2", "f3", "f4")):
+            event_id = f"ev{family}"
+            moves.append(recurring("2026-01-15", f"m{index}", f"{family}_series", "20", source_ids=(event_id,)))
+            events.append(expense(event_id, "dining", Flexibility.STOPPABLE))
+        source = baseline(*moves)
+        actions = enumerate_spending_change_actions(change_case(events=tuple(events)), source)
+        sets = _action_sets(actions)
+        self.assertEqual(max(len(action_set) for action_set in sets), 3)
+        self.assertEqual(len(sets), 14)  # C(4,1)*1 + C(4,2)*4 + C(4,3)*... canonical count
+
+    def test_cross_family_anchor_produces_no_actions(self) -> None:
+        # F-03 regression (B-AC-01/FR-04): one source event that anchors two
+        # families is ambiguous and produces no action for either family.
+        source = baseline(
+            move("2026-01-10", "opening", "open"),
+            recurring("2026-01-15", "m1", "a_series", "30", source_ids=("ev_x",)),
+            recurring("2026-01-16", "m2", "b_series", "30", source_ids=("ev_x",)),
+        )
+        actions = enumerate_spending_change_actions(
+            change_case(events=(expense("ev_x", "dining", Flexibility.STOPPABLE),)), source)
+        self.assertEqual(actions, ())
+
+    def test_public_request_boundaries_06_11_21(self) -> None:
+        # Real dataset pipeline: repository -> evidence -> events -> forecast -> planner.
+        # Planner integration evidence only; no request-ID product logic is added.
+        repo = DatasetRepository.from_directory(Path(__file__).resolve().parent.parent / "dataset")
+        expectations = {
+            "request_06": {("event_476", SpendingChangeType.STOP, None)},
+            "request_11": {("event_949", SpendingChangeType.STOP, None)},
+            "request_21": {("event_1815", SpendingChangeType.STOP, None),
+                           ("event_1816", SpendingChangeType.STOP, None),
+                           ("event_1816", SpendingChangeType.REDUCE_TO, money("23.5"))},
+        }
+        for request_id, expected_anchors in expectations.items():
+            with self.subTest(request_id=request_id):
+                current_case = repo.load_request_case(request_id)
+                evidence = resolve_case_evidence(current_case)
+                normalization = normalize_case_events(current_case, evidence)
+                forecast = build_baseline_forecast(current_case, evidence, normalization)
+                actions = enumerate_spending_change_actions(current_case, forecast)
+                anchors = {(action.event_id, action.change_type, action.new_amount)
+                           for family in actions for action in family.actions}
+                self.assertEqual(anchors, expected_anchors)
+                pool = build_candidate_pool(current_case, forecast)
+                for candidate in pool.candidates:
+                    if candidate.spending_changes:
+                        self.assertTrue(candidate.safety_replay.safe)
+                        self.assertEqual(tuple(candidate.safety_replay.applied_change_event_ids),
+                                         tuple(sorted({change.event_id for change in candidate.spending_changes})))

@@ -41,6 +41,7 @@ Read only the matching function and the nearest relevant test class.
 | Recurrence, variable-spending envelope, income, or baseline ledger | `forecast.py`: `build_baseline_forecast`, `BaselineForecast`, `ForecastPolicy`, `ForecastBuildError` | `tests/test_forecast.py` — `python3 -m unittest tests.test_forecast` |
 | Payment replay or baseline capacity | `planning.py`: `replay_schedule`, `compute_baseline_capacity`, `SafetyReplay`, `CapacityResult`, `PlanningError` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.SafetyReplayTests` or `python3 -m unittest tests.test_planning.CapacityTests` |
 | No-change candidate enumeration (WP-07A) | `planning.py`: `RecommendationMethod`, `PaymentTemplate`, `PlanCandidate`, `CandidatePool`, `build_no_change_candidate_pool` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.NoChangeCandidateTests` |
+| Spending-change candidate enumeration (WP-07B) | `planning.py`: `SpendingChangeAction`, `FamilyAction`, `enumerate_spending_change_actions`, `build_candidate_pool` | `tests/test_planning.py` — `python3 -m unittest tests.test_planning.SpendingChangeCandidateTests` |
 
 ## Dependency Fan-Out
 
